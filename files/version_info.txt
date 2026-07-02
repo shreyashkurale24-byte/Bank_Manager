@@ -1,0 +1,32 @@
+# UTF-8
+#
+# Version metadata embedded into desktop_run.exe
+# This shows up in: Windows file Properties > Details tab
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 8, 0, 0),
+    prodvers=(0, 8, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [StringStruct(u'CompanyName', u'Internal Dev Build — Not for Production'),
+          StringStruct(u'FileDescription', u'Bank Manager Pro - INTERNAL TEST TOOL (raw table CRUD, no auth)'),
+          StringStruct(u'FileVersion', u'0.8.0.0-dev'),
+          StringStruct(u'InternalName', u'desktop_run'),
+          StringStruct(u'LegalCopyright', u'Internal use only. Not licensed for customer deployment.'),
+          StringStruct(u'OriginalFilename', u'BankManagerPro_DEV.exe'),
+          StringStruct(u'ProductName', u'Bank Manager Pro [DEV/TEST BUILD]'),
+          StringStruct(u'ProductVersion', u'0.8.0-dev')])
+      ]),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
