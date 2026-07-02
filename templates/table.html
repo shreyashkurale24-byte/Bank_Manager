@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}{{ table_name }} — BANK Manager{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span>
+  <span class="current">{{ table_name }}</span>
+{% endblock %}
+
+{% block content %}
+<style>
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
+}
+.table-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.table-title-badge {
+  font-size: 12px;
+  font-family: 'Space Mono', monospace;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: var(--accent);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.table-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.search-box:focus-within { border-color: var(--accent); }
+.search-box input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 8px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  width: 200px;
+}
+.search-box input::placeholder { color: var(--text-dim); }
+.search-box button {
+  background: var(--border);
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+}
+.search-box button:hover { background: var(--accent); color: #000; }
+
+/* Data table */
+.data-table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: fadeIn 0.4s ease;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-table thead th {
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.data-table thead th.pk-col { color: var(--accent); }
+.data-table tbody tr {
+  border-bottom: 1px solid rgba(30,45,61,0.6);
+  transition: background 0.12s;
+  animation: rowIn 0.3s ease both;
+}
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.data-table tbody tr:hover { background: rgba(0,212,255,0.04); }
+.data-table tbody td {
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.data-table tbody td.actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: 'Syne', sans-serif;
+}
+.null-value { color: var(--text-dim); font-style: italic; }
+.pk-value { color: var(--accent); font-weight: 700; }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pagination-info {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+}
+.pagination-pages { display: flex; gap: 6px; flex-wrap: wrap; }
+.page-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+.page-btn:hover { border-color: var(--accent); color: var(--accent); }
+.page-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.page-btn.disabled { opacity: 0.3; pointer-events: none; }
+
+/* Empty state */
+.empty-state {
+  padding: 64px 20px;
+  text-align: center;
+}
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.empty-sub { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+
+/* Schema pills */
+.schema-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  animation: fadeIn 0.3s ease 0.1s both;
+}
+.schema-pill {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--panel);
+}
+.schema-pill.pk { border-color: rgba(0,212,255,0.4); color: var(--accent); }
+
+/* Delete confirm modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  width: 380px;
+  max-width: 95%;
+  transform: scale(0.95);
+  transition: transform 0.2s;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+.modal-overlay.open .modal { transform: scale(1); }
+.modal h3 { font-size: 18px; margin-bottom: 8px; }
+.modal p { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+
+<!-- Header -->
+<div class="table-header">
+  <div class="table-title">
+    {{ table_name }}
+    <span class="table-title-badge">{{ total }} records</span>
+  </div>
+  <div class="table-controls">
+    <form method="get" style="display:contents">
+      <div class="search-box">
+        <input name="search" value="{{ search }}" placeholder="Search records…">
+        <button type="submit">⌕</button>
+      </div>
+    </form>
+    <a href="{{ url_for('row_new', table_name=table_name) }}" class="btn btn-primary">
+      + New Record
+    </a>
+  </div>
+</div>
+
+<!-- Column schema pills -->
+<div class="schema-strip">
+  {% for col in columns %}
+    <span class="schema-pill {% if col.is_pk %}pk{% endif %}">
+      {% if col.is_pk %}🔑 {% endif %}{{ col.name }}
+      <span style="opacity:0.5">·{{ col.type[:8] }}</span>
+    </span>
+  {% endfor %}
+</div>
+
+<!-- Data Table -->
+<div class="data-table-wrap">
+  {% if rows %}
+  <div style="overflow-x:auto">
+    <table class="data-table">
+      <thead>
+        <tr>
+          {% for col in columns %}
+            <th class="{% if col.is_pk %}pk-col{% endif %}">
+              {% if col.is_pk %}🔑 {% endif %}{{ col.name }}
+            </th>
+          {% endfor %}
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr style="animation-delay:{{ loop.index0 * 0.03 }}s">
+          {% for col in columns %}
+            {% set val = row.get(col.name) %}
+            <td class="{% if col.is_pk %}pk-value{% endif %}"
+                title="{{ val if val is not none else 'NULL' }}">
+              {% if val is none %}
+                <span class="null-value">null</span>
+              {% else %}
+                {{ val|string|truncate(30, true, '…') }}
+              {% endif %}
+            </td>
+          {% endfor %}
+          <td class="actions">
+            {% set pk_cols = pk_cols %}
+            {% set pk_str = [] %}
+            {% for pk in pk_cols %}{% set _ = pk_str.append(row.get(pk, '')|string) %}{% endfor %}
+            {% set pk_joined = pk_str | join('__') %}
+            <a href="{{ url_for('row_edit', table_name=table_name, pk_str=pk_joined) }}"
+               class="btn btn-secondary btn-sm btn-icon" title="Edit">✎</a>
+            <button class="btn btn-danger btn-sm btn-icon"
+                    title="Delete"
+                    onclick="confirmDelete('{{ url_for('row_delete', table_name=table_name, pk_str=pk_joined) }}','{{ pk_joined }}')">🗑</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination">
+    <div class="pagination-info">
+      Page {{ page }} of {{ total_pages }} · {{ total }} total
+    </div>
+    <div class="pagination-pages">
+      <a href="?page={{ page-1 }}&search={{ search }}"
+         class="page-btn {% if page <= 1 %}disabled{% endif %}">‹</a>
+      {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
+        <a href="?page={{ p }}&search={{ search }}"
+           class="page-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+      {% endfor %}
+      <a href="?page={{ page+1 }}&search={{ search }}"
+         class="page-btn {% if page >= total_pages %}disabled{% endif %}">›</a>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <div class="empty-title">No records found</div>
+    <div class="empty-sub">
+      {% if search %}No records match "{{ search }}"{% else %}This table is empty{% endif %}
+    </div>
+    <a href="{{ url_for('row_new', table_name=table_name) }}" class="btn btn-primary">
+      + Add First Record
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Delete Modal -->
+<div class="modal-overlay" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h3 id="modalTitle">🗑 Delete Record</h3>
+    <p>This action <strong>cannot be undone</strong>. The record will be permanently removed from <strong>{{ table_name }}</strong>.</p>
+    <div id="deleteRecordInfo" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:6px;padding:7px 12px;margin-bottom:16px;word-break:break-all"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelDeleteBtn" onclick="closeModal()">Cancel</button>
+      <form id="deleteForm" method="post" style="display:inline">
+        <input type="hidden" name="_method" value="delete">
+        <button type="submit" class="btn btn-danger" id="confirmDeleteBtn">🗑 Yes, Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(url, pkInfo) {
+  const form = document.getElementById('deleteForm');
+  form.action = url;
+  /* show which record is being deleted */
+  const info = document.getElementById('deleteRecordInfo');
+  if(info) info.textContent = 'Record: ' + decodeURIComponent(pkInfo || url.split('/').pop());
+  document.getElementById('deleteModal').classList.add('open');
+  /* focus cancel by default — safer UX */
+  setTimeout(()=>document.getElementById('cancelDeleteBtn').focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('deleteModal').classList.remove('open');
+}
+
+/* Click outside modal → close */
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+/* ESC key → close */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+/* Prevent double-submit */
+document.getElementById('deleteForm').addEventListener('submit', function() {
+  const btn = document.getElementById('confirmDeleteBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Deleting…';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1337 @@
+{% extends "base.html" %}
+{% block title %}{{ mode }} Record — {{ table_name }}{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span>
+  <a href="{{ url_for('table_view', table_name=table_name) }}">{{ table_name }}</a>
+  <span class="sep">›</span>
+  <span class="cur">{{ mode }} Record</span>
+{% endblock %}
+
+{% block content %}
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   FORM LAYOUT
+   All field dimensions are CSS variables — edit them in base.html:
+     --field-h    height of every input        (default 42px)
+     --field-fs   font-size inside inputs      (default 13px)
+     --field-pad  padding inside inputs        (default 10px 13px)
+     --field-min  minimum grid column width    (default 300px)
+     --field-max  maximum grid column width    (default 1fr)
+     --field-gap  gap between grid columns     (default 16px)
+═══════════════════════════════════════════════════════════════ */
+.form-wrapper{max-width:960px;animation:fadeIn .35s ease}
+.form-header{margin-bottom:24px}
+.form-title{font-size:24px;font-weight:900;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mode-badge{font-size:11px;font-family:'Space Mono',monospace;padding:3px 11px;border-radius:20px}
+.mode-badge.Create{background:rgba(0,245,160,.1);border:1px solid rgba(0,245,160,.3);color:var(--green)}
+.mode-badge.Edit  {background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.3);color:var(--gold)}
+.form-sub{color:var(--text-dim);font-size:13px;margin-top:6px}
+.form-sub strong{color:var(--gold)}
+
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.4)}
+.form-section{padding:24px 28px}
+.section-hdr{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.section-hdr::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.fields-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--field-min),var(--field-max)));gap:var(--field-gap)}
+.field-group{display:flex;flex-direction:column;gap:5px;animation:fadeIn .3s ease both}
+.field-label{font-size:12px;font-weight:600;color:var(--text-dim);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+
+/* Tag badges on labels */
+.tag{font-family:'Space Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px}
+.tag-pk  {background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);color:var(--cyan)}
+.tag-type{background:var(--panel);border:1px solid var(--border);color:var(--text-dim)}
+.tag-auto{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);color:var(--purple)}
+.tag-req {background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);color:var(--red)}
+.tag-cap {background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.3);color:var(--gold)}
+.tag-len {background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);color:var(--cyan);font-size:8px}
+
+/* Base input style */
+.field-input{background:var(--panel);border:1px solid var(--border);color:var(--text);height:var(--field-h);padding:var(--field-pad);font-size:var(--field-fs);border-radius:8px;font-family:'Space Mono',monospace;outline:none;width:100%;transition:border-color .2s,box-shadow .2s}
+.field-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(240,192,64,.1)}
+.field-input:disabled{opacity:.35;cursor:not-allowed}
+.field-input::placeholder{color:var(--text-dim)}
+.field-input.uppercase{text-transform:uppercase;letter-spacing:.5px}
+.field-input.error{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(255,68,102,.1)!important}
+
+/* Inline validation message below each field */
+.field-msg{font-size:11px;font-family:'Space Mono',monospace;min-height:16px;transition:all .2s}
+.field-msg.err {color:var(--red)}
+.field-msg.ok  {color:var(--green)}
+.field-msg.hint{color:var(--text-dim);font-style:italic}
+
+/* ═══════════════════════════════════════════════════════════════
+   CASH / AMOUNT FIELD STYLES
+   ───────────────────────────────────────────────────────────────
+   • .amount-wrap       — position:relative container
+   • .amount-prefix     — the ₹ (or $ £ €) badge on the left edge
+   • .amount-wrap input — extra left padding to clear the badge
+   • .amount-words      — italic line-of-words below the input
+   • .amount-pill       — CR (green) / DR (red) pill at end of words
+═══════════════════════════════════════════════════════════════ */
+.amount-wrap{position:relative}
+
+/* Gold badge that shows the currency symbol */
+.amount-prefix{
+  position:absolute;left:0;top:0;bottom:0;width:38px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(240,192,64,.10);border-right:1px solid rgba(240,192,64,.25);
+  border-radius:8px 0 0 8px;
+  color:var(--gold);font-family:'Space Mono',monospace;font-size:14px;font-weight:700;
+  pointer-events:none;z-index:1;
+}
+/* Push input text right so it doesn't overlap the badge */
+.amount-wrap .field-input{padding-left:50px;padding-right:12px;letter-spacing:.3px}
+.amount-wrap .field-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(240,192,64,.12)}
+
+/* Amount-in-words line under the input (e.g. "One Lakh Rupees Only ▲ CR") */
+.amount-words{
+  font-family:'Space Mono',monospace;font-size:10px;
+  color:var(--gold);font-style:italic;min-height:14px;margin-top:2px;
+  transition:opacity .2s;letter-spacing:.2px;
+}
+
+/* CR/DR pill appended to the words line */
+.amount-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:'Space Mono',monospace;font-size:9px;font-weight:700;
+  padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;
+}
+.amount-pill.cr{background:rgba(0,245,160,.1);border:1px solid rgba(0,245,160,.3);color:var(--green)}
+.amount-pill.dr{background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.3);color:var(--red)}
+
+/* ═══════════════════════════════════════════════════════════════
+   DATE FIELD STYLES
+   ───────────────────────────────────────────────────────────────
+   The date picker is THREE separate <input> elements (DD, MM, YYYY)
+   sitting inside a flex container (.date-shell) that LOOKS like one
+   single input box. This avoids every browser's built-in date picker
+   and gives full manual-typing control.
+
+   Layout:
+     [date-wrap (position:relative)]
+       [date-shell (flex row, looks like input)]
+         [dseg DD] [/] [dseg MM] [/] [dseg YYYY] [📅 button]
+       [hidden input  ← YYYYMMDD sent to server]
+       [date-calendar ← absolute-positioned popup]
+
+   States on .date-shell:
+     (no class)  → neutral / in-progress
+     .ds-valid   → green border, shows "✓ Tue, 9 Jun 2026"
+     .ds-error   → red border + shake, shows error message
+═══════════════════════════════════════════════════════════════ */
+.date-wrap{position:relative}
+
+/* Shell mimics a standard input box */
+.date-shell{
+  display:flex;align-items:center;gap:0;
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;height:var(--field-h);
+  padding:0 8px 0 12px;
+  font-family:'Space Mono',monospace;font-size:var(--field-fs);color:var(--text);
+  cursor:text;transition:border-color .2s,box-shadow .2s;
+}
+.date-shell:focus-within{border-color:var(--gold);box-shadow:0 0 0 3px rgba(240,192,64,.1)}
+
+/* Valid date → green glow */
+.date-shell.ds-valid{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,245,160,.08)}
+
+/* Invalid date → red glow + shake animation */
+.date-shell.ds-error{
+  border-color:var(--red)!important;
+  box-shadow:0 0 0 3px rgba(255,68,102,.1)!important;
+  animation:dsShake .35s ease;
+}
+@keyframes dsShake{
+  0%,100%{transform:translateX(0)}
+  25%    {transform:translateX(-4px)}
+  75%    {transform:translateX( 4px)}
+}
+
+/* Each DD / MM / YYYY tiny input */
+.dseg{
+  background:transparent;border:none;outline:none;
+  font-family:'Space Mono',monospace;font-size:var(--field-fs);
+  color:var(--text);text-align:center;
+  caret-color:var(--gold);   /* visible blinking cursor */
+  padding:4px 2px;border-radius:4px;
+  transition:background .15s,color .15s;
+}
+/* Highlight whichever segment is active */
+.dseg:focus{background:rgba(240,192,64,.13);color:var(--gold)}
+.dseg::placeholder{color:var(--text-dim);opacity:.6}
+
+/* "/" separators between segments */
+.dsep{color:var(--text-dim);font-size:16px;padding:0 2px;pointer-events:none;user-select:none}
+
+/* Calendar open button (SVG icon — no emoji rendering differences cross-browser) */
+.date-cal-btn{
+  margin-left:auto;flex-shrink:0;
+  background:none;border:none;cursor:pointer;
+  color:var(--text-dim);padding:4px 5px;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  transition:color .15s,background .15s;
+}
+.date-cal-btn:hover{color:var(--gold);background:rgba(240,192,64,.12)}
+.date-cal-btn svg{width:16px;height:16px;fill:currentColor}
+
+/* ── Calendar dropdown panel ── */
+.date-cal-panel{
+  position:absolute;top:calc(100% + 8px);left:0;z-index:9500;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);
+  padding:16px;width:290px;display:none;
+}
+.date-cal-panel.cal-open{
+  display:block;
+  animation:calIn .2s cubic-bezier(.22,1,.36,1);
+}
+@keyframes calIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+
+/* Month navigation row inside calendar */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-nav-btn{
+  background:none;border:1px solid var(--border);color:var(--text-dim);
+  border-radius:7px;width:30px;height:30px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  transition:border-color .15s,color .15s;
+}
+.cal-nav-btn:hover{border-color:var(--gold);color:var(--gold)}
+.cal-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--text);letter-spacing:.3px}
+
+/* Day-of-week header (Mo Tu We …) */
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px}
+.cal-dow span{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;color:var(--text-dim);text-align:center;padding:3px 0;text-transform:uppercase;letter-spacing:.5px}
+
+/* Day buttons grid */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:500;
+  border-radius:7px;cursor:pointer;border:none;background:none;color:var(--text);
+  transition:background .1s,color .1s;
+}
+.cal-day:hover:not([disabled]){background:rgba(240,192,64,.15);color:var(--gold)}
+.cal-day.cal-today{border:1.5px solid rgba(0,212,255,.5);color:var(--cyan)}
+.cal-day.cal-sel{background:var(--gold)!important;color:#111!important;font-weight:700;border-radius:8px}
+.cal-day.cal-other{color:var(--text-dim);opacity:.4}
+.cal-day[disabled]{opacity:.2;cursor:not-allowed}
+
+/* Quick-pick footer (Today / Yesterday / 1st / Last / Clear) */
+.cal-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.cal-qbtn{
+  font-family:'Space Mono',monospace;font-size:9px;
+  background:var(--panel);border:1px solid var(--border);
+  color:var(--text-dim);border-radius:5px;padding:3px 9px;
+  cursor:pointer;transition:border-color .15s,color .15s;
+}
+.cal-qbtn:hover{border-color:var(--gold);color:var(--gold)}
+.cal-clr{
+  margin-left:auto;font-family:'Space Mono',monospace;font-size:9px;
+  background:none;border:1px solid rgba(255,68,102,.35);
+  color:var(--red);border-radius:5px;padding:3px 9px;cursor:pointer;
+  transition:background .15s,border-color .15s;
+}
+.cal-clr:hover{background:rgba(255,68,102,.08);border-color:var(--red)}
+
+/* Toast notification */
+#toast{
+  position:fixed;bottom:28px;right:28px;z-index:9000;
+  background:var(--surface);border:1px solid var(--red);
+  border-radius:10px;padding:0;font-family:'Space Mono',monospace;
+  font-size:12px;color:var(--red);
+  display:flex;align-items:stretch;overflow:hidden;
+  transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.2,1,.3,1);
+  max-width:340px;pointer-events:all;box-shadow:0 8px 32px rgba(255,68,102,.2);
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast-icon{background:rgba(255,68,102,.12);padding:12px 14px;display:flex;align-items:center;font-size:16px;border-right:1px solid rgba(255,68,102,.2);flex-shrink:0}
+#toast-body{padding:12px 16px}
+#toastMsg{line-height:1.4}
+#toast-close{position:absolute;top:6px;right:8px;cursor:pointer;font-size:14px;opacity:.5}
+@keyframes toastShake{0%,100%{transform:translateY(0) translateX(0)}25%{transform:translateY(0) translateX(-4px)}75%{transform:translateY(0) translateX(4px)}}
+#toast.shake{animation:toastShake .35s ease}
+
+.form-footer{padding:16px 26px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;justify-content:flex-end;background:var(--panel)}
+.kbd-hint{font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-right:auto}
+</style>
+
+<!-- Toast -->
+<div id="toast" role="alert" aria-live="assertive">
+  <div id="toast-icon">⛔</div>
+  <div id="toast-body"><span id="toastMsg"></span></div>
+  <span id="toast-close" onclick="document.getElementById('toast').classList.remove('show')">✕</span>
+</div>
+
+<div class="form-wrapper">
+  <div class="form-header">
+    <div class="form-title">
+      {{ '✚ New Record' if mode=='Create' else '✎ Edit Record' }}
+      <span class="mode-badge {{ mode }}">{{ mode }}</span>
+    </div>
+    <div class="form-sub">Table: <strong>{{ table_name }}</strong> &nbsp;·&nbsp; {{ columns|length }} fields</div>
+  </div>
+
+  <form method="post" id="crudForm" novalidate>
+    <div class="form-card">
+      <div class="form-section">
+        <div class="section-hdr">🔑 Primary Key Fields</div>
+        <div class="fields-grid" style="margin-bottom:24px">
+          {% for col in columns if col.is_pk %}
+            {% set delay = loop.index0 * 0.025 %}
+            <div class="field-group" style="animation-delay:{{ delay }}s">
+              <label class="field-label">
+                {{ col.name }}
+                <span class="tag tag-pk">PK</span>
+                <span class="tag tag-type">{{ col.type[:10] }}</span>
+                {% if col.auto_increment %}<span class="tag tag-auto">AUTO</span>{% endif %}
+                {% if col.max_len %}<span class="tag tag-len">max {{ col.max_len }}</span>{% endif %}
+              </label>
+              {% if col.auto_increment %}
+                <input class="field-input" type="text" disabled
+                       value="{% if row and row.get(col.name) %}{{ row.get(col.name) }}{% else %}Auto-generated{% endif %}">
+              {% elif mode == 'Edit' %}
+                <input class="field-input" type="text" name="{{ col.name }}" readonly style="opacity:.5"
+                       value="{{ row.get(col.name,'') if row else '' }}">
+              {% else %}
+                <input class="field-input" type="text" name="{{ col.name }}"
+                       id="f_{{ col.name }}"
+                       value="{{ row.get(col.name,'') if row else '' }}"
+                       placeholder="{{ col.name }}"
+                       data-kind="alnum"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}>
+              {% endif %}
+              <div class="field-msg hint" id="msg_{{ col.name }}">
+                {% if col.comment %}{{ col.comment }}{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="section-hdr">📋 Data Fields</div>
+        <div class="fields-grid">
+          {% for col in columns if not col.is_pk %}
+            {% set delay  = (loop.index0 + 2) * 0.02 %}
+            {% set cname  = col.name %}
+            {% set ctype  = col.type.upper() %}
+            {% set val    = row.get(cname, '') if row else (col.default or '') %}
+
+            {# ── Classify each field ── #}
+            {% set is_amount = cname in ['OpenCash','CloseCash','CrAmt','DrAmt','OpenCashAmt','CloseCashAmt']
+                               or 'amount' in cname.lower() or 'cash' in cname.lower()
+                               or 'amt' in cname.lower() or 'bal' in cname.lower() %}
+            {% set is_date   = 'DATE' in ctype or cname.lower().endswith('date')
+                               or cname in ['TrDate','opendate','closedate','ENTRYDATE','EntryDate','OpenBalDate'] %}
+            {% set is_int    = ('INT' in ctype or 'REAL' in ctype or 'DECIMAL' in ctype) and not is_amount and not is_date %}
+            {% set is_cap    = cname in ['IFSC','MICR','TIN','Code','tanno','TRTIME','ENTRYTIME','EntryTime'] %}
+            {% set is_phone  = 'phone' in cname.lower() or 'mobile' in cname.lower() or 'fax' in cname.lower() %}
+            {% set is_email  = 'mail' in cname.lower() or 'email' in cname.lower() %}
+            {% set is_pin    = cname == 'PinCode' %}
+
+            <div class="field-group" style="animation-delay:{{ delay }}s">
+              <label class="field-label" for="f_{{ cname }}">
+                {{ cname }}
+                <span class="tag tag-type">{{ col.type[:8] }}</span>
+                {% if is_cap    %}<span class="tag tag-cap">CAPS</span>{% endif %}
+                {% if is_amount %}<span class="tag" style="background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.3);color:var(--gold);font-family:'Space Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px">₹ AMOUNT</span>{% endif %}
+                {% if is_date   %}<span class="tag" style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.22);color:var(--cyan);font-family:'Space Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px">📅 DATE</span>{% endif %}
+                {% if col.max_len %}<span class="tag tag-len">max {{ col.max_len }}</span>{% endif %}
+                {% if not col.nullable %}<span class="tag tag-req">required</span>{% endif %}
+              </label>
+
+              {# ════════════════════════════════════════════════════════
+                 CASH / AMOUNT FIELD
+                 ────────────────────────────────────────────────────────
+                 Renders a display input (shows live formatted value, e.g.
+                 ₹ 1,23,45,678.00) and a hidden input (sends clean number
+                 like 12345678.00 to the server). The ₹ badge is a separate
+                 absolutely-positioned element inside .amount-wrap.
+                 Below the input, .amount-words shows the rupee-in-words
+                 string (e.g. "One Lakh Rupees and Fifty Paise Only ▲ CR").
+              ════════════════════════════════════════════════════════ #}
+              {% if is_amount %}
+                {% set raw_val = val|string if val else '' %}
+                <div class="amount-wrap">
+                  {# Currency symbol badge — JS will stamp CURRENCY_SYMBOL here #}
+                  <span class="amount-prefix" id="pfx_{{ cname }}">₹</span>
+                  {# Visible display input — user types here, JS reformats live #}
+                  <input class="field-input" type="text" inputmode="decimal"
+                         id="f_{{ cname }}"
+                         value="{% if raw_val and raw_val != 'None' %}{{ raw_val }}{% endif %}"
+                         placeholder="0.00"
+                         data-kind="amount"
+                         data-field="{{ cname }}"
+                         autocomplete="off" spellcheck="false">
+                  {# Hidden field — always holds plain numeric value for POST #}
+                  <input type="hidden" id="raw_{{ cname }}" name="{{ cname }}"
+                         value="{% if raw_val and raw_val != 'None' %}{{ raw_val }}{% endif %}">
+                </div>
+                {# Amount in words (updated live by JS) #}
+                <div class="amount-words" id="words_{{ cname }}"></div>
+
+              {# ════════════════════════════════════════════════════════
+                 DATE FIELD
+                 ────────────────────────────────────────────────────────
+                 Three separate text inputs for DD, MM, YYYY sit inside
+                 a flex shell (.date-shell) that looks like one input box.
+
+                 How manual typing works:
+                   1. User clicks/tabs into DD → types two digits (e.g. 09)
+                   2. After the 2nd digit JS auto-moves focus to MM
+                   3. User types two digits in MM (e.g. 06)
+                   4. After the 2nd digit JS auto-moves focus to YYYY
+                   5. User types four digits in YYYY (e.g. 2026)
+                   6. JS validates and shows  ✓ Tue, 9 Jun 2026  in green
+
+                 Other controls:
+                   ↑/↓ arrows  — increment / decrement the focused segment
+                   ←/→ arrows  — move between segments
+                   Backspace   — on empty segment moves back to previous
+                   T key       — fills today's date instantly
+                   Scroll      — nudges the focused segment up or down
+                   📅 button   — opens the floating calendar
+
+                 Server format: hidden input sends YYYYMMDD (e.g. 20260609)
+              ════════════════════════════════════════════════════════ #}
+              {% elif is_date %}
+                {# Pre-populate from existing YYYYMMDD value if editing #}
+                {% set vs = val|string %}
+                {% if val and vs|length == 8 %}
+                  {% set i_dd   = vs[6:8] %}
+                  {% set i_mm   = vs[4:6] %}
+                  {% set i_yyyy = vs[0:4] %}
+                {% else %}
+                  {% set i_dd = '' %}{% set i_mm = '' %}{% set i_yyyy = '' %}
+                {% endif %}
+
+                <div class="date-wrap" id="dwrap_{{ cname }}">
+                  {# The shell — clicking anywhere focuses the DD segment #}
+                  <div class="date-shell" id="dshell_{{ cname }}"
+                       onclick="datePickerFocus('dd_{{ cname }}')">
+
+                    {# DD segment — accepts exactly 2 digits #}
+                    <input class="dseg" type="text" inputmode="numeric"
+                           id="dd_{{ cname }}"
+                           maxlength="2" size="2"
+                           placeholder="DD"
+                           value="{{ i_dd }}"
+                           data-seg="dd" data-dp="{{ cname }}"
+                           autocomplete="off" spellcheck="false"
+                           aria-label="Day">
+
+                    <span class="dsep">/</span>
+
+                    {# MM segment — accepts exactly 2 digits #}
+                    <input class="dseg" type="text" inputmode="numeric"
+                           id="mm_{{ cname }}"
+                           maxlength="2" size="2"
+                           placeholder="MM"
+                           value="{{ i_mm }}"
+                           data-seg="mm" data-dp="{{ cname }}"
+                           autocomplete="off" spellcheck="false"
+                           aria-label="Month">
+
+                    <span class="dsep">/</span>
+
+                    {# YYYY segment — accepts exactly 4 digits #}
+                    <input class="dseg" type="text" inputmode="numeric"
+                           id="yyyy_{{ cname }}"
+                           maxlength="4" size="4"
+                           placeholder="YYYY"
+                           value="{{ i_yyyy }}"
+                           data-seg="yyyy" data-dp="{{ cname }}"
+                           autocomplete="off" spellcheck="false"
+                           aria-label="Year">
+
+                    {# Calendar icon button (SVG — no emoji cross-browser issues) #}
+                    <button type="button" class="date-cal-btn"
+                            id="calbtn_{{ cname }}"
+                            onclick="event.stopPropagation(); calToggle('{{ cname }}')"
+                            title="Open calendar" tabindex="-1" aria-label="Open calendar">
+                      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.89 2 3 2.9 3 4v16c0 1.1.89 2 2 2h14c1.1 0
+                                 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 18H5V9h14v13zM5 7V4h14v3H5zm2 4h2v2H7v-2zm
+                                 4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2z"/>
+                      </svg>
+                    </button>
+                  </div>
+
+                  {# Hidden field — holds YYYYMMDD for the server POST #}
+                  <input type="hidden" id="real_{{ cname }}" name="{{ cname }}" value="{{ val }}">
+
+                  {# Floating calendar panel — populated by JS on demand #}
+                  <div class="date-cal-panel" id="cal_{{ cname }}" data-dp="{{ cname }}"></div>
+                </div>
+
+              {# ── CAPS field (uppercase letters + digits only) ── #}
+              {% elif is_cap %}
+                <input class="field-input uppercase" type="text"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="{{ cname }}"
+                       data-kind="caps"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}
+                       autocomplete="off">
+
+              {# ── Phone / fax ── #}
+              {% elif is_phone %}
+                <input class="field-input" type="tel"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="Numbers only"
+                       data-kind="phone"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}
+                       autocomplete="off">
+
+              {# ── PIN (6-digit) ── #}
+              {% elif is_pin %}
+                <input class="field-input" type="text" inputmode="numeric"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="6-digit PIN"
+                       data-kind="pin" maxlength="6" autocomplete="off">
+
+              {# ── Integer / numeric ── #}
+              {% elif is_int %}
+                <input class="field-input" type="text" inputmode="numeric"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="{{ cname }}"
+                       data-kind="number"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}
+                       autocomplete="off">
+
+              {# ── Email ── #}
+              {% elif is_email %}
+                <input class="field-input" type="email"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="email@bank.com"
+                       data-kind="email"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}
+                       autocomplete="off">
+
+              {# ── Default text (alphanumeric) ── #}
+              {% else %}
+                <input class="field-input" type="text"
+                       id="f_{{ cname }}" name="{{ cname }}"
+                       value="{{ val }}" placeholder="{{ cname }}"
+                       data-kind="alnum"
+                       {% if col.max_len %}maxlength="{{ col.max_len }}"{% endif %}
+                       autocomplete="off">
+              {% endif %}
+
+              <div class="field-msg hint" id="msg_{{ cname }}">
+                {% if col.comment %}{{ col.comment }}{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <div class="kbd-hint">💡 Ctrl+Enter to save &nbsp;|&nbsp; T = today in any date field &nbsp;|&nbsp; ₹ amounts auto-format</div>
+        <a href="{{ url_for('table_view', table_name=table_name) }}" class="btn btn-secondary">← Cancel</a>
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          {{ '✚ Insert Record' if mode=='Create' else '✔ Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   BANK MANAGER PRO — Form Engine  (clean build, zero handler conflicts)
+   ═══════════════════════════════════════════════════════════════════════
+
+   SECTION 1 — CONFIGURATION
+   SECTION 2 — UTILITIES  (beep, toast)
+   SECTION 3 — CASH / AMOUNT ENGINE
+   SECTION 4 — DATE PICKER ENGINE
+   SECTION 5 — OTHER FIELDS  (caps, phone, pin, number, alnum)
+   SECTION 6 — FORM SUBMIT HANDLER
+═══════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 1 · CONFIGURATION
+   ───────────────────────────────────────────────────────────────────────
+   CURRENCY_SYMBOL  Change to $ € £ ¥ — appears in the badge on the left
+                    of every amount field.
+
+   DECIMAL_RULES    Per-field decimal places. Keys must match column names
+                    exactly. Any amount field not listed uses DEFAULT_DECIMALS.
+                    Example: add  SavAmt: 4  to show 4 decimal places.
+═══════════════════════════════════════════════════════════════════════ */
+const CURRENCY_SYMBOL  = '₹';
+const DECIMAL_RULES    = {
+  OpenCash : 2,   /* Opening Cash Balance  */
+  CloseCash: 2,   /* Closing Cash Balance  */
+  CrAmt    : 2,   /* Credit Amount         */
+  DrAmt    : 2,   /* Debit Amount          */
+};
+const DEFAULT_DECIMALS = 2;
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 2 · UTILITIES — beep + toast
+   ───────────────────────────────────────────────────────────────────────
+   beep()        Plays a short 880 Hz square-wave tone via Web Audio API.
+                 Called whenever a blocked key is pressed.
+
+   showToast(msg) Slides up a red notification bar in the bottom-right
+                 corner. If already visible it shakes instead of re-flying.
+                 Auto-hides after 3.2 seconds. Dismissable with ✕.
+═══════════════════════════════════════════════════════════════════════ */
+function beep(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type='square'; osc.frequency.value=880;
+    g.gain.setValueAtTime(.15,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.18);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+.18);
+  }catch(_){}
+}
+
+let _toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  const m=document.getElementById('toastMsg');
+  if(!t||!m) return;
+  m.textContent=msg.replace(/^[⛔⚠✅]\s*/,'');
+  if(t.classList.contains('show')){
+    t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake');
+  } else { t.classList.add('show'); }
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 3 · CASH / AMOUNT ENGINE
+   ───────────────────────────────────────────────────────────────────────
+   How it works end-to-end:
+   ┌──────────────────────────────────────────────────────────────────┐
+   │ User types "1234567.50" into the display input                   │
+   │   → input event strips non-numeric, keeps one dot               │
+   │   → toIndianFmt() converts to "12,34,567.50"                    │
+   │   → display input shows "12,34,567.50"                          │
+   │   → hidden raw_ input stores "1234567.50"                       │
+   │   → amount-words div shows                                       │
+   │     "Twelve Lakh Thirty Four Thousand Five Hundred Sixty        │
+   │      Seven Rupees and Fifty Paise Only  ▲ CR"                   │
+   │ On form submit: raw_ field gets the column name, display input   │
+   │ loses its name — server receives the clean number.               │
+   └──────────────────────────────────────────────────────────────────┘
+
+   toIndianFmt(plain)
+     Converts a plain number string to Indian comma format.
+     Indian grouping: last 3 digits, then groups of 2 from the right.
+     Examples:
+       "1000"       → "1,000"
+       "100000"     → "1,00,000"
+       "12345678"   → "1,23,45,678"
+       "12345.67"   → "12,345.67"
+
+   toWords(raw, dec)
+     Returns the rupee-in-words string using the Indian Crore/Lakh system.
+     Example: 1500000.75 → "Fifteen Lakh Rupees and Seventy Five Paise Only"
+═══════════════════════════════════════════════════════════════════════ */
+
+/* Indian comma format */
+function toIndianFmt(plain){
+  if(plain===''||plain==null) return '';
+  const s=String(plain).replace(/,/g,'');
+  const neg=s.startsWith('-');
+  const abs=neg?s.slice(1):s;
+  const [ip,dp]=abs.split('.');
+  let r='';
+  const n=ip.length;
+  if(n<=3){ r=ip; }
+  else{
+    r=ip.slice(-3);
+    let rem=ip.slice(0,n-3);
+    while(rem.length>2){ r=rem.slice(-2)+','+r; rem=rem.slice(0,rem.length-2); }
+    if(rem) r=rem+','+r;
+  }
+  if(dp!==undefined) r+='.'+dp;
+  return (neg?'-':'')+r;
+}
+
+/* Number → Indian words */
+const _WO=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
+           'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen',
+           'Seventeen','Eighteen','Nineteen'];
+const _WT=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+function _wBH(n){ return n<20?_WO[n]:_WT[Math.floor(n/10)]+(_WO[n%10]?' '+_WO[n%10]:''); }
+function _wBT(n){ return n<100?_wBH(n):_WO[Math.floor(n/100)]+' Hundred'+(n%100?' '+_wBH(n%100):''); }
+function _numWords(n){
+  n=Math.floor(Math.abs(n)); if(!n) return 'Zero';
+  const p=[];
+  const cr=Math.floor(n/1e7); n%=1e7;
+  const lk=Math.floor(n/1e5); n%=1e5;
+  const th=Math.floor(n/1e3); n%=1e3;
+  if(cr) p.push(_wBT(cr)+' Crore');
+  if(lk) p.push(_wBT(lk)+' Lakh');
+  if(th) p.push(_wBT(th)+' Thousand');
+  if(n)  p.push(_wBT(n));
+  return p.join(' ');
+}
+function toWords(raw,dec){
+  const num=parseFloat(raw);
+  if(isNaN(num)||num===0) return '';
+  const neg=num<0, abs=Math.abs(num);
+  const iw=_numWords(abs);
+  const dn=parseInt(abs.toFixed(dec).split('.')[1]||'0',10);
+  let w=(neg?'Minus ':'')+iw+' Rupee'+(Math.floor(abs)!==1?'s':'');
+  if(dn>0) w+=' and '+_numWords(dn)+' Paise';
+  return w+' Only';
+}
+
+/* Wire one amount field */
+function initAmount(inp){
+  const field  =inp.dataset.field;
+  const rawEl  =document.getElementById('raw_'+field);
+  const wordsEl=document.getElementById('words_'+field);
+  const msgEl  =document.getElementById('msg_'+field);
+  const dec    =DECIMAL_RULES[field]??DEFAULT_DECIMALS;
+  const pfx    =document.getElementById('pfx_'+field);
+  if(pfx) pfx.textContent=CURRENCY_SYMBOL;   /* stamp configured symbol */
+
+  function setMsg(t,c){ if(msgEl){msgEl.className='field-msg '+(c||'hint');msgEl.textContent=t;} }
+
+  function refresh(stripped){
+    if(rawEl) rawEl.value=stripped;
+    if(!wordsEl) return;
+    const w=toWords(stripped,dec);
+    if(w){
+      const pill=parseFloat(stripped)>=0
+        ?'<span class="amount-pill cr">▲ CR</span>'
+        :'<span class="amount-pill dr">▼ DR</span>';
+      wordsEl.innerHTML=w+pill;
+      setMsg(CURRENCY_SYMBOL+' '+toIndianFmt(parseFloat(stripped).toFixed(dec)),'ok');
+    } else { wordsEl.innerHTML=''; setMsg('Enter amount','hint'); }
+  }
+
+  /* keydown: only digits and one dot allowed */
+  inp.addEventListener('keydown',e=>{
+    if(e.ctrlKey||e.altKey||e.metaKey) return;
+    if(e.key.length!==1) return;
+    if(/[0-9]/.test(e.key)) return;  /* always OK */
+    if(e.key==='.'){
+      if(!inp.value.replace(/,/g,'').includes('.')){return;}  /* first dot OK */
+      e.preventDefault(); beep(); showToast('Only one decimal point allowed!'); return;
+    }
+    e.preventDefault(); beep();
+    inp.classList.add('error'); setTimeout(()=>inp.classList.remove('error'),500);
+    showToast('Amount fields accept digits only!');
+  });
+
+  /* input: reformat live with Indian commas */
+  inp.addEventListener('input',()=>{
+    const sel=inp.selectionStart;
+    const old=inp.value;
+    let s=old.replace(/[^0-9.]/g,'');
+    const di=s.indexOf('.');
+    if(di!==-1) s=s.slice(0,di+1)+s.slice(di+1).replace(/\./g,'').slice(0,dec);
+    const fmt=toIndianFmt(s);
+    inp.value=fmt;
+    const ns=Math.max(0,sel+(fmt.length-old.length));
+    try{inp.setSelectionRange(ns,ns);}catch(_){}
+    refresh(s);
+  });
+
+  inp.addEventListener('focus',()=>inp.select());
+
+  /* blur: lock to N decimal places */
+  inp.addEventListener('blur',()=>{
+    const s=inp.value.replace(/,/g,'');
+    const n=parseFloat(s);
+    if(!isNaN(n)&&s!==''){
+      const fx=n.toFixed(dec);
+      inp.value=toIndianFmt(fx); refresh(fx);
+    } else if(s===''){
+      inp.value=''; refresh('');
+      if(wordsEl) wordsEl.innerHTML='';
+      setMsg('Enter amount','hint');
+    }
+  });
+
+  /* paste: only numeric text allowed */
+  inp.addEventListener('paste',e=>{
+    e.preventDefault();
+    const raw=(e.clipboardData||window.clipboardData).getData('text');
+    const clean=raw.replace(/[^0-9.]/g,'');
+    if(!clean){ beep(); showToast('Only numbers can be pasted here!'); return; }
+    inp.value=clean;
+    inp.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+
+  /* initialise with existing edit-mode value */
+  if(inp.value){
+    const n=parseFloat(inp.value.replace(/,/g,''));
+    if(!isNaN(n)){ inp.value=toIndianFmt(n.toFixed(dec)); refresh(n.toFixed(dec)); }
+  } else { setMsg('Enter amount','hint'); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 4 · DATE PICKER ENGINE
+   ───────────────────────────────────────────────────────────────────────
+   Manual typing flow (step by step):
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  1. Focus lands on DD segment (click or Tab)                     │
+   │  2. User types digit 1 → "1" appears, cursor stays in DD        │
+   │  3. User types digit 0 → "10" appears                           │
+   │     → segment is full (2 digits) → auto-focus moves to MM       │
+   │  4. User types "06" in MM → auto-focus moves to YYYY            │
+   │  5. User types "2026" in YYYY → JS validates                    │
+   │     → shell turns GREEN, message shows "✓ Wed, 10 Jun 2026"     │
+   │     → hidden real_ input gets "20260610" for the server         │
+   └──────────────────────────────────────────────────────────────────┘
+
+   Keyboard shortcuts inside any segment:
+     ↑ / ↓          increment / decrement value (wraps correctly)
+     → / ←          move to next / previous segment
+     Backspace       on empty segment → moves to previous segment
+     Tab             advances to next segment (DD→MM→YYYY)
+     T               fills today's date instantly
+     Escape          closes the calendar popup
+
+   Calendar popup:
+     📅 button       opens / closes the floating calendar panel
+     Click a day     fills that date and closes the popup
+     Quick picks     Today · Yesterday · 1st of Month · Last of Month
+     ✕ Clear         empties all three segments
+
+   Data format:
+     Display         DD / MM / YYYY  (what the user sees)
+     Server          YYYYMMDD        (what goes in the hidden input)
+═══════════════════════════════════════════════════════════════════════ */
+
+const CAL_MONTHS=['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+function _dim(m,y){ return new Date(y,m,0).getDate(); }   /* days in month */
+function _pad(n,l=2){ return String(n).padStart(l,'0'); }  /* zero-pad      */
+
+/* Read current segment values for a field */
+function _dpRead(f){
+  const g=id=>(document.getElementById(id)||{value:''}).value;
+  return {dd:g('dd_'+f),mm:g('mm_'+f),yyyy:g('yyyy_'+f)};
+}
+
+/* Focus a segment and select its text */
+function datePickerFocus(id){
+  const e=document.getElementById(id);
+  if(e){e.focus();e.select();}
+}
+
+/* Write a JS Date object into the three segments, then commit */
+function _dpWrite(field,date){
+  const s=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+  s('dd_'+field,   _pad(date.getDate()));
+  s('mm_'+field,   _pad(date.getMonth()+1));
+  s('yyyy_'+field, _pad(date.getFullYear(),4));
+  _dpCommit(field);
+}
+
+/* Commit: validate segments → update hidden field + shell state + message */
+function _dpCommit(field){
+  const ddEl   =document.getElementById('dd_'+field);
+  const mmEl   =document.getElementById('mm_'+field);
+  const yyyyEl =document.getElementById('yyyy_'+field);
+  const realEl =document.getElementById('real_'+field);
+  const shell  =document.getElementById('dshell_'+field);
+  const msgEl  =document.getElementById('msg_'+field);
+  if(!ddEl) return;
+
+  const dd=ddEl.value.trim(), mm=mmEl.value.trim(), yyyy=yyyyEl.value.trim();
+  const any=dd||mm||yyyy;
+
+  /* Helper: set shell state class */
+  const setState=s=>{
+    shell.classList.remove('ds-valid','ds-error');
+    if(s) shell.classList.add(s);
+  };
+  /* Helper: set message below the field */
+  const setMsg=(t,c)=>{
+    if(!msgEl) return;
+    msgEl.className='field-msg '+(c||'hint');
+    msgEl.textContent=t;
+  };
+
+  /* Empty — show placeholder hint */
+  if(!any){
+    if(realEl) realEl.value='';
+    setState(null); setMsg('DD / MM / YYYY','hint'); return;
+  }
+  /* Incomplete — keep neutral while user is still typing */
+  if(!dd||!mm||!yyyy||yyyy.length<4){
+    if(realEl) realEl.value='';
+    setState(null); setMsg('Fill DD → MM → YYYY','hint'); return;
+  }
+
+  /* Full — validate */
+  const d=parseInt(dd,10), m=parseInt(mm,10), y=parseInt(yyyy,10);
+  if(isNaN(d)||isNaN(m)||isNaN(y)||y<1900||y>2100||m<1||m>12||d<1||d>_dim(m,y)){
+    if(realEl) realEl.value='';
+    setState('ds-error');
+    setMsg('✗  Invalid date — check day / month / year','err');
+    return;
+  }
+
+  /* Valid — green shell + full label */
+  if(realEl) realEl.value=_pad(y,4)+_pad(m)+_pad(d);
+  setState('ds-valid');
+  setMsg('✓ '+new Date(y,m-1,d).toLocaleDateString('en-IN',
+    {weekday:'short',day:'numeric',month:'short',year:'numeric'}),'ok');
+
+  /* Refresh any open calendar so the selected day highlights */
+  const cal=document.getElementById('cal_'+field);
+  if(cal&&cal.classList.contains('cal-open')) _calRender(field,y,m-1);
+}
+
+/* Nudge (increment or decrement) the focused segment */
+function _dpNudge(seg,delta){
+  const field=seg.dataset.dp, kind=seg.dataset.seg;
+  let v=parseInt(seg.value,10)||0;
+  if(kind==='dd'){
+    const mm=parseInt((document.getElementById('mm_'+field)||{}).value,10)||1;
+    const yy=parseInt((document.getElementById('yyyy_'+field)||{}).value,10)||new Date().getFullYear();
+    const mx=_dim(mm,yy);
+    v=((v-1+delta+mx)%mx)+1; seg.value=_pad(v);
+  } else if(kind==='mm'){
+    v=((v-1+delta+12)%12)+1; seg.value=_pad(v);
+    const ddEl=document.getElementById('dd_'+field);
+    if(ddEl&&ddEl.value){
+      const yy=parseInt((document.getElementById('yyyy_'+field)||{}).value,10)||new Date().getFullYear();
+      if(parseInt(ddEl.value,10)>_dim(v,yy)) ddEl.value=_pad(_dim(v,yy));
+    }
+  } else {
+    v=Math.max(1900,Math.min(2100,v+delta)); seg.value=_pad(v,4);
+    const ddEl=document.getElementById('dd_'+field);
+    const mmEl=document.getElementById('mm_'+field);
+    if(ddEl&&mmEl&&ddEl.value&&mmEl.value){
+      const mx=_dim(parseInt(mmEl.value,10),v);
+      if(parseInt(ddEl.value,10)>mx) ddEl.value=_pad(mx);
+    }
+  }
+  _dpCommit(field);
+}
+
+/* Wire events onto one date field (called once per field on load) */
+function initDateField(field){
+  ['dd','mm','yyyy'].forEach(kind=>{
+    const seg=document.getElementById(kind+'_'+field);
+    if(!seg) return;
+
+    seg.addEventListener('keydown',e=>{
+      if(e.ctrlKey||e.altKey||e.metaKey) return;  /* allow Ctrl+C etc */
+
+      switch(e.key){
+        /* ↑ / ↓  increment or decrement this segment */
+        case 'ArrowUp':   e.preventDefault(); _dpNudge(seg,+1); return;
+        case 'ArrowDown': e.preventDefault(); _dpNudge(seg,-1); return;
+
+        /* → move to next segment when at end of current */
+        case 'ArrowRight':
+          if(seg.selectionStart===seg.value.length){
+            e.preventDefault();
+            if(kind==='dd')  datePickerFocus('mm_'+field);
+            if(kind==='mm')  datePickerFocus('yyyy_'+field);
+          }
+          return;
+
+        /* ← move to previous segment when at start */
+        case 'ArrowLeft':
+          if(seg.selectionStart===0){
+            e.preventDefault();
+            if(kind==='yyyy') datePickerFocus('mm_'+field);
+            if(kind==='mm')   datePickerFocus('dd_'+field);
+          }
+          return;
+
+        /* Backspace on empty → move to previous segment */
+        case 'Backspace':
+          if(seg.value===''){
+            e.preventDefault();
+            if(kind==='yyyy') datePickerFocus('mm_'+field);
+            if(kind==='mm')   datePickerFocus('dd_'+field);
+          }
+          return;
+
+        /* Tab → advance to next segment (not the next form field) */
+        case 'Tab':
+          if(!e.shiftKey && kind!=='yyyy'){
+            e.preventDefault();
+            datePickerFocus((kind==='dd'?'mm_':'yyyy_')+field);
+          }
+          return;
+
+        /* T / t → fill today instantly */
+        case 't': case 'T':
+          e.preventDefault(); _dpWrite(field,new Date()); return;
+
+        /* Escape → close calendar */
+        case 'Escape':
+          calClose(field); return;
+
+        default:
+          /* Block every non-digit printable character */
+          if(e.key.length===1 && !/[0-9]/.test(e.key)){
+            e.preventDefault(); beep();
+            const sh=document.getElementById('dshell_'+field);
+            if(sh){sh.classList.add('ds-error');setTimeout(()=>sh.classList.remove('ds-error'),500);}
+            showToast('Date fields only accept digits (0 – 9)');
+          }
+          /* digit → browser inserts it → input event fires below */
+      }
+    });
+
+    /* input: strip non-digits, clamp, auto-advance when full */
+    seg.addEventListener('input',()=>{
+      seg.value=seg.value.replace(/\D/g,'');
+      const maxLen=kind==='yyyy'?4:2;
+      if(seg.value.length>maxLen) seg.value=seg.value.slice(0,maxLen);
+
+      if(kind==='dd'&&seg.value.length===2){
+        const mm=parseInt((document.getElementById('mm_'+field)||{}).value,10)||1;
+        const yy=parseInt((document.getElementById('yyyy_'+field)||{}).value,10)||new Date().getFullYear();
+        const rawD=parseInt(seg.value,10)||0;
+        const maxD=_dim(mm,yy);
+        /* ── Beep + toast if day is 0 or exceeds this month's maximum ── */
+        if(rawD===0||rawD>maxD){
+          beep();
+          const sh=document.getElementById('dshell_'+field);
+          if(sh){sh.classList.add('ds-error');setTimeout(()=>sh.classList.remove('ds-error'),600);}
+          const mName=mm>=1&&mm<=12?CAL_MONTHS[mm-1]:'this month';
+          showToast(mName+' only has '+maxD+' days. You entered '+seg.value+'.');
+          seg.value='';      /* clear so user can retype */
+          seg.select();
+          return;            /* stay in DD segment */
+        }
+        seg.value=_pad(rawD);
+        datePickerFocus('mm_'+field);   /* ← auto-advance to month */
+      }
+      if(kind==='mm'&&seg.value.length===2){
+        const rawV=parseInt(seg.value,10)||0;
+        /* ── Beep + toast if month is 0 or above 12 ── */
+        if(rawV===0||rawV>12){
+          beep();
+          const sh=document.getElementById('dshell_'+field);
+          if(sh){sh.classList.add('ds-error');setTimeout(()=>sh.classList.remove('ds-error'),600);}
+          showToast('Month must be 01 – 12. You entered '+seg.value+'.');
+          seg.value='';      /* clear so user can retype */
+          seg.select();
+          return;            /* stay in MM segment */
+        }
+        let v=rawV;
+        seg.value=_pad(v);
+        /* re-clamp day if month changed */
+        const ddEl=document.getElementById('dd_'+field);
+        if(ddEl&&ddEl.value){
+          const yy=parseInt((document.getElementById('yyyy_'+field)||{}).value,10)||new Date().getFullYear();
+          if(parseInt(ddEl.value,10)>_dim(v,yy)){
+            /* ── Beep + toast: day doesn't exist in this month ── */
+            beep();
+            const sh2=document.getElementById('dshell_'+field);
+            if(sh2){sh2.classList.add('ds-error');setTimeout(()=>sh2.classList.remove('ds-error'),700);}
+            showToast(_dim(v,yy)+' is the last day of '+CAL_MONTHS[v-1]+'. Day auto-corrected.');
+            ddEl.value=_pad(_dim(v,yy));
+          }
+        }
+        datePickerFocus('yyyy_'+field); /* ← auto-advance to year */
+      }
+      if(kind==='yyyy'&&seg.value.length===4){
+        /* re-clamp day for leap year changes */
+        const mmEl=document.getElementById('mm_'+field);
+        const ddEl=document.getElementById('dd_'+field);
+        if(mmEl&&ddEl&&mmEl.value&&ddEl.value){
+          const yy=parseInt(seg.value,10);
+          const mx=_dim(parseInt(mmEl.value,10),yy);
+          if(parseInt(ddEl.value,10)>mx) ddEl.value=_pad(mx);
+        }
+      }
+      _dpCommit(field);
+    });
+
+    /* focus: select all text in segment so next digit replaces it */
+    seg.addEventListener('focus',()=>seg.select());
+
+    /* blur: pad single digit (e.g. "9" → "09") */
+    seg.addEventListener('blur',()=>{
+      if(seg.value){
+        if(kind!=='yyyy') seg.value=_pad(parseInt(seg.value,10)||1);
+        else seg.value=_pad(parseInt(seg.value,10)||new Date().getFullYear(),4);
+      }
+      _dpCommit(field);
+    });
+
+    /* paste: strip to digits only */
+    seg.addEventListener('paste',e=>{
+      e.preventDefault();
+      const digs=((e.clipboardData||window.clipboardData).getData('text')||'').replace(/\D/g,'');
+      if(!digs){
+        beep();
+        const sh=document.getElementById('dshell_'+field);
+        if(sh){sh.classList.add('ds-error');setTimeout(()=>sh.classList.remove('ds-error'),600);}
+        showToast('Only digits can be pasted into a date field');
+        return;
+      }
+      seg.value=digs.slice(0,kind==='yyyy'?4:2);
+      seg.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+
+    /* scroll wheel: nudge value up or down */
+    seg.addEventListener('wheel',e=>{
+      if(document.activeElement!==seg) return;
+      e.preventDefault();
+      _dpNudge(seg,e.deltaY<0?+1:-1);
+    },{passive:false});
+  });
+
+  /* Set initial hint message */
+  const msgEl=document.getElementById('msg_'+field);
+  if(msgEl&&!msgEl.textContent.trim()){
+    msgEl.className='field-msg hint';
+    msgEl.textContent='DD / MM / YYYY';
+  }
+  /* Validate any pre-filled value (Edit mode) */
+  _dpCommit(field);
+}
+
+/* ── Calendar popup ── */
+function calToggle(field){
+  const cal=document.getElementById('cal_'+field);
+  if(!cal) return;
+  if(cal.classList.contains('cal-open')){ calClose(field); return; }
+  document.querySelectorAll('.date-cal-panel.cal-open').forEach(c=>c.classList.remove('cal-open'));
+  const {mm,yyyy}=_dpRead(field);
+  const now=new Date();
+  _calRender(field, parseInt(yyyy)||now.getFullYear(), parseInt(mm)?parseInt(mm)-1:now.getMonth());
+  cal.classList.add('cal-open');
+}
+function calClose(field){
+  const c=document.getElementById('cal_'+field); if(c) c.classList.remove('cal-open');
+}
+
+function _calRender(field,year,month){
+  const cal=document.getElementById('cal_'+field); if(!cal) return;
+  const {dd,mm,yyyy}=_dpRead(field);
+  const sD=parseInt(dd)||0, sM=parseInt(mm)||0, sY=parseInt(yyyy)||0;
+  const now=new Date(), tD=now.getDate(), tM=now.getMonth()+1, tY=now.getFullYear();
+  const dow=((new Date(year,month,1).getDay()+6)%7);
+  const total=_dim(month+1,year), prev=_dim(month,year);
+  const pY=month===0?year-1:year, pM=month===0?11:month-1;
+  const nY=month===11?year+1:year, nM=month===11?0:month+1;
+
+  let h=`<div class="cal-head">
+    <button type="button" class="cal-nav-btn" onclick="_calRender('${field}',${pY},${pM})">&#8249;</button>
+    <span class="cal-title">${CAL_MONTHS[month]} ${year}</span>
+    <button type="button" class="cal-nav-btn" onclick="_calRender('${field}',${nY},${nM})">&#8250;</button>
+  </div>
+  <div class="cal-dow"><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></div>
+  <div class="cal-grid">`;
+
+  for(let i=dow-1;i>=0;i--){
+    h+=`<button type="button" class="cal-day cal-other" onclick="_calPick('${field}',${pY},${pM},${prev-i})">${prev-i}</button>`;
+  }
+  for(let d=1;d<=total;d++){
+    const sel=d===sD&&month+1===sM&&year===sY;
+    const tod=d===tD&&month+1===tM&&year===tY;
+    h+=`<button type="button" class="cal-day${sel?' cal-sel':''}${tod&&!sel?' cal-today':''}" onclick="_calPick('${field}',${year},${month},${d})">${d}</button>`;
+  }
+  const rem=(dow+total)%7; for(let d=1;d<=(rem?7-rem:0);d++){
+    h+=`<button type="button" class="cal-day cal-other" onclick="_calPick('${field}',${nY},${nM},${d})">${d}</button>`;
+  }
+  h+=`</div><div class="cal-foot">
+    <button type="button" class="cal-qbtn" onclick="_dpWrite('${field}',new Date())">Today</button>
+    <button type="button" class="cal-qbtn" onclick="_calYest('${field}')">Yesterday</button>
+    <button type="button" class="cal-qbtn" onclick="_calFirst('${field}')">1st</button>
+    <button type="button" class="cal-qbtn" onclick="_calLast('${field}')">Last</button>
+    <button type="button" class="cal-clr" onclick="_calClear('${field}')">✕ Clear</button>
+  </div>`;
+  cal.innerHTML=h;
+}
+function _calPick(f,y,m,d){ _dpWrite(f,new Date(y,m,d)); calClose(f); datePickerFocus('yyyy_'+f); }
+function _calYest(f){ const d=new Date(); d.setDate(d.getDate()-1); _dpWrite(f,d); calClose(f); }
+function _calFirst(f){ const d=new Date(); d.setDate(1); _dpWrite(f,d); calClose(f); }
+function _calLast(f){ const d=new Date(); _dpWrite(f,new Date(d.getFullYear(),d.getMonth()+1,0)); calClose(f); }
+function _calClear(field){
+  ['dd','mm','yyyy'].forEach(k=>{const e=document.getElementById(k+'_'+field);if(e)e.value='';});
+  const r=document.getElementById('real_'+field); if(r) r.value='';
+  _dpCommit(field); calClose(field);
+}
+
+/* Close calendar on outside click or Escape */
+document.addEventListener('click',e=>{
+  document.querySelectorAll('.date-cal-panel.cal-open').forEach(cal=>{
+    const wrap=document.getElementById('dwrap_'+cal.dataset.dp);
+    if(wrap&&!wrap.contains(e.target)) calClose(cal.dataset.dp);
+  });
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') document.querySelectorAll('.date-cal-panel.cal-open').forEach(c=>c.classList.remove('cal-open'));
+});
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 5 · OTHER FIELDS
+   ───────────────────────────────────────────────────────────────────────
+   Blocked characters (all fields except email):
+     ! @ # $ % ^ & * ( ) + = { } [ ] | \ ; ' " < > , ? / ~ `
+   A beep + red flash + toast appear on any blocked keystroke.
+   Paste is also sanitised — blocked chars are stripped silently.
+
+   Field kinds:
+     caps   → uppercase A-Z and 0-9 only (IFSC, MICR, etc.)
+     phone  → digits only
+     pin    → digits only, max 6
+     number → digits and minus sign only
+     alnum  → letters, digits, space, - _ . @ /
+     email  → unrestricted (browser validates on submit)
+═══════════════════════════════════════════════════════════════════════ */
+const BLOCKED_CHARS=/[!@#$%^&*()\+=\[\]{}|\\;'"<>,?\/~`]/;
+
+function initOtherField(inp){
+  const kind=inp.dataset.kind;
+  const name=inp.name||inp.id.replace(/^f_/,'');
+  const msgEl=document.getElementById('msg_'+name);
+  const maxL=parseInt(inp.getAttribute('maxlength'))||9999;
+  const setMsg=(t,c)=>{ if(msgEl){msgEl.className='field-msg '+(c||'hint');msgEl.textContent=t;} };
+
+  /* Special char guard (skip for email) */
+  if(kind!=='email'){
+    inp.addEventListener('keydown',e=>{
+      if(e.ctrlKey||e.altKey||e.metaKey) return;
+      BLOCKED_CHARS.lastIndex=0;
+      if(e.key.length===1&&BLOCKED_CHARS.test(e.key)){
+        e.preventDefault(); beep();
+        inp.classList.add('error'); setTimeout(()=>inp.classList.remove('error'),500);
+        showToast('Special characters are not allowed!');
+      }
+    });
+    inp.addEventListener('paste',e=>{
+      e.preventDefault();
+      const raw=(e.clipboardData||window.clipboardData).getData('text');
+      let cleaned=raw;
+      while(BLOCKED_CHARS.test(cleaned)){ BLOCKED_CHARS.lastIndex=0; cleaned=cleaned.replace(BLOCKED_CHARS,''); }
+      if(cleaned!==raw){ beep(); showToast('Special characters removed from pasted text!'); }
+      const s=inp.selectionStart, en=inp.selectionEnd;
+      const nv=(inp.value.slice(0,s)+cleaned+inp.value.slice(en)).slice(0,maxL);
+      inp.value=nv; inp.setSelectionRange(s+cleaned.length,s+cleaned.length);
+      inp.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+  }
+
+  if(kind==='caps'){
+    inp.addEventListener('input',()=>{
+      const c=inp.selectionStart, orig=inp.value;
+      const cl=orig.toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if(cl!==orig.toUpperCase()){ beep(); showToast('Only uppercase letters and numbers!'); }
+      inp.value=cl; inp.setSelectionRange(c,c);
+    });
+  }
+  if(kind==='phone'||kind==='pin'){
+    inp.addEventListener('input',()=>{
+      const cl=inp.value.replace(/\D/g,'');
+      if(cl!==inp.value){ beep(); showToast('Numbers only in this field!'); }
+      inp.value=cl;
+    });
+  }
+  if(kind==='number'){
+    inp.addEventListener('input',()=>{
+      const cl=inp.value.replace(/[^0-9\-]/g,'');
+      if(cl!==inp.value){ beep(); showToast('Numbers only in this field!'); }
+      inp.value=cl;
+    });
+  }
+  if(kind==='alnum'){
+    inp.addEventListener('input',()=>{
+      const orig=inp.value;
+      const cl=orig.replace(/[^a-zA-Z0-9\s\-_.@/]/g,'');
+      if(cl!==orig){
+        beep(); showToast('Special characters are not allowed!');
+        const pos=inp.selectionStart-(orig.length-cl.length);
+        inp.value=cl; inp.setSelectionRange(pos,pos);
+      }
+    });
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 6 · BOOTSTRAP & FORM SUBMIT
+   ───────────────────────────────────────────────────────────────────────
+   On DOMContentLoaded:
+     1. Wire every [data-kind="amount"] input via initAmount()
+     2. Wire every date field via initDateField()
+     3. Wire every other [data-kind] input via initOtherField()
+
+   On form submit:
+     • Amount: the hidden raw_ field gets the column name; the display
+       input loses its name — server never sees formatted commas.
+     • Date: if any segment is partially filled but the hidden real_ field
+       is empty, block submit and show an error.
+     • Disable submit button to prevent double-posting.
+═══════════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', ()=>{
+
+  /* Amount fields */
+  document.querySelectorAll('[data-kind="amount"]').forEach(initAmount);
+
+  /* Date fields — collect unique field names from all .dseg elements */
+  const dateFields=new Set();
+  document.querySelectorAll('.dseg[data-dp]').forEach(s=>dateFields.add(s.dataset.dp));
+  dateFields.forEach(initDateField);
+
+  /* All other typed fields */
+  document.querySelectorAll('.field-input[data-kind]').forEach(inp=>{
+    if(inp.dataset.kind!=='amount') initOtherField(inp);
+  });
+
+  /* Form submit */
+  const form=document.getElementById('crudForm');
+  if(!form) return;
+
+  form.addEventListener('submit',e=>{
+
+    /* Amount: swap hidden field name so server gets plain number */
+    document.querySelectorAll('[data-kind="amount"]').forEach(inp=>{
+      const fn=inp.dataset.field;
+      const raw=document.getElementById('raw_'+fn);
+      if(raw&&raw.value){ raw.name=fn; inp.removeAttribute('name'); }
+      else { inp.value=inp.value.replace(/,/g,''); }
+    });
+
+    /* Date: block submit if any date is partially filled but invalid */
+    let dateErr=false;
+    document.querySelectorAll('.date-cal-panel[data-dp]').forEach(cal=>{
+      const fn=cal.dataset.dp;
+      const real=document.getElementById('real_'+fn);
+      const dd=document.getElementById('dd_'+fn);
+      const mm=document.getElementById('mm_'+fn);
+      const yy=document.getElementById('yyyy_'+fn);
+      if(!dd) return;
+      if((dd.value||mm.value||yy.value)&&(!real||!real.value)){
+        dateErr=true;
+        const sh=document.getElementById('dshell_'+fn);
+        if(sh) sh.classList.add('ds-error');
+      }
+    });
+    if(dateErr){ e.preventDefault(); showToast('Fix invalid dates before saving.'); return; }
+
+    /* Disable submit button to prevent double-posting */
+    const btn=document.getElementById('submitBtn');
+    if(btn){ btn.textContent='⏳ Saving…'; btn.disabled=true; btn.style.opacity='.65'; }
+  });
+
+  /* Ctrl+Enter = submit */
+  document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key==='Enter') form.submit();
+  });
+});
+</script>
+{% endblock %}

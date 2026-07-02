@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}BANK Manager Pro{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════
+   DESIGN TOKENS
+   ── To change a colour, edit here only ──
+══════════════════════════════════════════ */
+:root{
+  /* Backgrounds */
+  --bg:       #04070d;
+  --surface:  #090f1a;
+  --panel:    #0e1624;
+  /* Borders */
+  --border:   #1a2840;
+  --border2:  #243555;
+  /* Brand */
+  --gold:     #f0c040;
+  --gold2:    #e8963c;
+  --accent:   var(--gold);
+  --accent2:  var(--gold2);
+  /* Status */
+  --cyan:     #00d4ff;
+  --green:    #00f5a0;
+  --red:      #ff4466;
+  --orange:   #ff8c00;
+  --purple:   #7c3aed;
+  /* Text */
+  --text:     #ccdcee;
+  --text-dim: #4a6070;
+  --radius:   10px;
+
+  /* ════════════════════════════════════════
+     FIELD DIMENSIONS — edit these values
+     to change input widths/heights globally
+     ════════════════════════════════════════
+     --field-h    : height of every input
+     --field-fs   : font-size inside inputs
+     --field-pad  : padding inside inputs
+     --field-min  : minimum column width in form grid
+     --field-max  : maximum column width in form grid
+     --field-gap  : gap between form columns
+  */
+  /* ── FIELD DIMENSIONS — content-aware auto sizing ───────────────
+     These six variables control every input field in every form.
+     Changing one value here resizes all matching fields globally.
+
+     --field-h    Input height.
+                  'auto' lets the input grow with its content/padding.
+                  Set a fixed px value (e.g. 42px) for uniform heights.
+
+     --field-fs   Font size inside inputs.
+                  'clamp(12px,1.1vw,14px)' scales smoothly with viewport:
+                  minimum 12px, preferred 1.1vw, maximum 14px.
+
+     --field-pad  Internal padding (vertical horizontal).
+                  '0.6em 0.9em' scales with the font size so spacing
+                  stays proportional regardless of --field-fs value.
+
+     --field-min  Minimum column width in the form grid.
+                  'min(100%,260px)' means each column is at least 260px
+                  wide but will shrink to 100% on narrow screens.
+
+     --field-max  Maximum column width.
+                  '1fr' fills available space equally across columns.
+                  Use 'max-content' to let columns size to their content.
+
+     --field-gap  Gutters between grid columns and rows.
+                  'clamp(10px,1.5vw,20px)' keeps spacing proportional.
+  ──────────────────────────────────────────────────────────────── */
+  --field-h:   auto;                  /* height: grows with content  */
+  --field-fs:  clamp(12px,1.1vw,14px);/* font: fluid 12–14px        */
+  --field-pad: 0.6em 0.9em;           /* padding: em-relative        */
+  --field-min: min(100%,260px);       /* col min: responsive 260px   */
+  --field-max: 1fr;                   /* col max: fill equally        */
+  --field-gap: clamp(10px,1.5vw,20px);/* gap: fluid 10–20px          */
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:'Syne',sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:repeating-linear-gradient(
+    0deg,transparent,transparent 31px,
+    rgba(255,255,255,.011) 31px,rgba(255,255,255,.011) 32px);
+}
+
+/* ══ SPLASH — shown only once (sessionStorage flag) ══ */
+#splash{
+  position:fixed;inset:0;z-index:9999;background:#030508;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;cursor:pointer;
+}
+#splash.hide{animation:spHide .9s cubic-bezier(.77,0,.18,1) forwards;pointer-events:none}
+@keyframes spHide{0%{opacity:1;transform:scale(1)}55%{opacity:1;transform:scale(1.03)}100%{opacity:0;transform:scale(.94)}}
+.sp-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(240,192,64,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(240,192,64,.04) 1px,transparent 1px);
+  background-size:66px 66px;animation:gridD 12s linear infinite;
+}
+@keyframes gridD{from{background-position:0 0}to{background-position:66px 66px}}
+.sp-orb{
+  position:absolute;width:780px;height:780px;
+  background:radial-gradient(circle,rgba(240,192,64,.13) 0%,rgba(232,150,60,.04) 42%,transparent 68%);
+  border-radius:50%;animation:orbB 3.5s ease-in-out infinite alternate;
+}
+@keyframes orbB{from{transform:scale(.78);opacity:.55}to{transform:scale(1.15);opacity:1}}
+.sp-scan{
+  position:absolute;width:100%;height:3px;
+  background:linear-gradient(90deg,transparent,rgba(240,192,64,.8),transparent);
+  animation:scanL 2.7s ease-in-out infinite;z-index:2;
+}
+@keyframes scanL{0%{top:-5%;opacity:0}7%{opacity:1}93%{opacity:1}100%{top:108%;opacity:0}}
+.sp-corner{
+  position:absolute;width:56px;height:56px;
+  border-color:rgba(240,192,64,.5);border-style:solid;
+  opacity:0;animation:cIn .5s ease .6s forwards;z-index:3;
+}
+@keyframes cIn{from{opacity:0;transform:scale(1.5)}to{opacity:1;transform:scale(1)}}
+.sp-corner.tl{top:22px;left:22px;border-width:2px 0 0 2px}
+.sp-corner.tr{top:22px;right:22px;border-width:2px 2px 0 0}
+.sp-corner.bl{bottom:22px;left:22px;border-width:0 0 2px 2px}
+.sp-corner.br{bottom:22px;right:22px;border-width:0 2px 2px 0}
+.sp-body{position:relative;z-index:4;text-align:center;display:flex;flex-direction:column;align-items:center}
+.sp-pre{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:7px;
+  text-transform:uppercase;color:var(--gold);margin-bottom:18px;
+  opacity:0;animation:rUp .6s ease .18s forwards;
+}
+@keyframes rUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.sp-word{font-family:'Syne',sans-serif;font-weight:900;font-size:clamp(60px,13vw,150px);line-height:.93;letter-spacing:-3px;display:flex}
+.sp-word .L{
+  display:inline-block;
+  background:linear-gradient(155deg,#fff 0%,var(--gold) 38%,var(--gold2) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 28px rgba(240,192,64,.45));
+  opacity:0;animation:lIn .55s cubic-bezier(.18,1.1,.3,1) forwards;
+}
+@keyframes lIn{0%{opacity:0;transform:translateY(55px) rotateX(-22deg);filter:blur(14px) drop-shadow(0 0 28px rgba(240,192,64,.45))}55%{filter:blur(0) drop-shadow(0 0 28px rgba(240,192,64,.45))}100%{opacity:1;transform:translateY(0) rotateX(0)}}
+.sp-mgr{
+  font-family:'Syne',sans-serif;font-weight:400;
+  font-size:clamp(20px,4.3vw,50px);letter-spacing:clamp(14px,3.8vw,30px);
+  text-transform:uppercase;color:var(--text);margin-top:6px;
+  opacity:0;animation:rUp .7s ease 1.18s forwards;
+}
+.sp-div{width:0;height:2px;margin:24px 0;background:linear-gradient(90deg,transparent,var(--gold),var(--gold2),transparent);animation:dGrow .85s ease 1.42s forwards;border-radius:2px}
+@keyframes dGrow{from{width:0;opacity:0}to{width:360px;opacity:1}}
+.sp-tag{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);letter-spacing:2.5px;opacity:0;animation:rUp .5s ease 1.72s forwards}
+.sp-ldr{position:absolute;bottom:42px;left:50%;transform:translateX(-50%);z-index:4;text-align:center;width:280px}
+.sp-trk{width:100%;height:2px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;opacity:0;animation:rUp .4s ease 1.88s forwards}
+.sp-fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2));animation:fillB 1.3s ease 2.02s forwards;border-radius:2px}
+@keyframes fillB{0%{width:0}30%{width:48%}60%{width:72%}85%{width:89%}100%{width:100%}}
+.sp-lbl{font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:2.5px;margin-top:9px;opacity:0;animation:rUp .4s ease 1.88s forwards}
+.sp-skip{position:absolute;bottom:14px;right:18px;font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,255,255,.16);letter-spacing:1px;z-index:5;opacity:0;animation:rUp .4s ease 2.5s forwards}
+.sp-pt{position:absolute;border-radius:50%;pointer-events:none;animation:ptF var(--d) ease-in-out var(--dl) infinite alternate}
+@keyframes ptF{from{opacity:0;transform:translateY(0) scale(1)}40%{opacity:.55}to{opacity:.04;transform:translateY(-60px) scale(1.8)}}
+
+/* ══ Idle timeout overlay ══ */
+#idle-overlay{
+  position:fixed;inset:0;z-index:8888;
+  background:rgba(3,5,10,.95);
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:20px;text-align:center;
+}
+#idle-overlay.show{display:flex;animation:fadeIn .4s ease}
+.idle-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:40px 48px;max-width:400px;
+}
+.idle-box h2{font-size:22px;font-weight:800;color:var(--gold);margin-bottom:8px}
+.idle-box p{font-size:13px;color:var(--text-dim);margin-bottom:24px;line-height:1.7}
+.idle-timer{
+  font-family:'Space Mono',monospace;font-size:36px;font-weight:700;
+  color:var(--red);margin-bottom:20px;
+}
+.btn-resume{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:12px 24px;border-radius:9px;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  color:#06090e;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;
+  border:none;cursor:pointer;transition:all .2s;
+}
+.btn-resume:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+/* ══ SIDEBAR ══ */
+#sidebar{
+  width:260px;min-width:260px;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  height:100vh;position:sticky;top:0;overflow:hidden;z-index:10;
+}
+#sidebar::before{content:'';display:block;height:2px;background:linear-gradient(90deg,var(--gold),var(--gold2))}
+.sidebar-logo{padding:20px 18px 15px;border-bottom:1px solid var(--border)}
+.logo-row{display:flex;align-items:center;gap:11px}
+.logo-icon{
+  width:38px;height:38px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;font-size:19px;
+  box-shadow:0 4px 14px rgba(240,192,64,.35);
+}
+.logo-text{font-size:14px;font-weight:900;background:linear-gradient(90deg,var(--gold),var(--gold2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo-sub{font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;margin-top:2px}
+.sidebar-search{padding:12px 14px;border-bottom:1px solid var(--border);position:relative}
+.sidebar-search input{
+  width:100%;background:var(--panel);border:1px solid var(--border);
+  color:var(--text);padding:8px 12px;border-radius:8px;
+  font-family:'Space Mono',monospace;font-size:12px;outline:none;
+  transition:border-color .2s;
+}
+.sidebar-search input:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(240,192,64,.1)}
+.sidebar-search input::placeholder{color:var(--text-dim)}
+.sidebar-nav{flex:1;overflow-y:auto;padding:8px 0;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.sb-sec{padding:8px 16px 4px;font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--text-dim)}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:9px 16px;
+  text-decoration:none;color:var(--text-dim);font-size:13px;font-weight:500;
+  transition:all .14s;border-left:3px solid transparent;
+}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.nav-item.active{color:var(--gold);border-left-color:var(--gold);background:rgba(240,192,64,.07)}
+.nav-dot{width:6px;height:6px;background:var(--text-dim);border-radius:50%;flex-shrink:0}
+.nav-item.active .nav-dot{background:var(--gold)}
+.sidebar-foot{
+  padding:12px 16px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.user-chip{
+  font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);
+  display:flex;align-items:center;gap:6px;
+}
+.live-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:livePulse 2s infinite}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(0,245,160,.55)}50%{box-shadow:0 0 0 5px rgba(0,245,160,0)}}
+.logout-btn{
+  font-size:12px;color:var(--text-dim);text-decoration:none;
+  padding:4px 8px;border-radius:6px;transition:all .14s;
+  font-family:'Space Mono',monospace;
+}
+.logout-btn:hover{color:var(--red);background:rgba(255,68,102,.1)}
+
+/* ══ MAIN ══ */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;z-index:1;position:relative}
+.topbar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  height:56px;padding:0 26px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:9;
+}
+.bc{font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:8px}
+.bc a{color:var(--text-dim);text-decoration:none;transition:color .14s}
+.bc a:hover{color:var(--gold)}
+.bc .sep{color:var(--border)}
+.bc .cur{color:var(--text);font-weight:700}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tb-chip{
+  font-family:'Space Mono',monospace;font-size:10px;
+  background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.2);
+  color:var(--gold);padding:4px 10px;border-radius:20px;
+}
+.idle-chip{
+  font-family:'Space Mono',monospace;font-size:10px;
+  background:rgba(0,245,160,.06);border:1px solid rgba(0,245,160,.2);
+  color:var(--green);padding:4px 10px;border-radius:20px;
+  display:flex;align-items:center;gap:5px;
+}
+.content{flex:1;overflow-y:auto;padding:26px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+
+/* ══ Alerts ══ */
+.alert{
+  padding:12px 16px;border-radius:9px;margin-bottom:18px;
+  font-size:13px;display:flex;align-items:center;gap:10px;
+  animation:slideD .28s ease;
+}
+@keyframes slideD{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.alert-success{background:rgba(0,245,160,.08);border:1px solid rgba(0,245,160,.28);color:var(--green)}
+.alert-error  {background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.28);color:var(--red)}
+
+/* ══ Buttons ══ */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 18px;border-radius:8px;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
+  cursor:pointer;border:none;text-decoration:none;white-space:nowrap;transition:all .2s;
+}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#06090e}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 20px rgba(240,192,64,.4)}
+.btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--border)}
+.btn-danger{background:rgba(255,68,102,.1);color:var(--red);border:1px solid rgba(255,68,102,.25)}
+.btn-danger:hover{background:rgba(255,68,102,.2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:7px 9px}
+
+/* ══ Fade-in ══ */
+.fade-in{animation:fadeIn .38s ease both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AI OUTFIT-COLOR THEME ENGINE  ·  base.html injection
+   ───────────────────────────────────────────────────────────────────────
+   The floating panel (bottom-right) lets the user:
+     1. SCAN  — opens the device camera, captures a video frame, runs a
+                canvas-based dominant-color algorithm (median-cut), then
+                extracts the most prominent hue from the user's outfit
+                and applies it as the accent across borders, brand text,
+                status pills, and interactive highlights.
+     2. RESET — reverts to the default gold (#f0c040) accent.
+     3. DARK / LIGHT toggle — switches the entire surface palette.
+
+   CSS variables modified at runtime (on :root):
+     --gold     → primary accent (borders, focus rings, active states)
+     --cyan     → secondary accent (tags, today-highlight in calendar)
+     --surface  → page background
+     --panel    → card / input background
+     --border   → all borders
+     --text     → primary text
+     --text-dim → muted / placeholder text
+
+   The panel itself uses fixed positioning so it appears on every page.
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Floating AI theme button (bottom-right corner) ── */
+#ai-theme-btn{
+  position:fixed;bottom:24px;left:24px;z-index:8500;
+  width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,var(--gold),var(--cyan));
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;box-shadow:0 4px 20px rgba(0,0,0,.4);
+  transition:transform .2s,box-shadow .2s;
+  animation:aiFab .6s cubic-bezier(.22,1,.36,1) 1.5s both;
+}
+#ai-theme-btn:hover{transform:scale(1.1);box-shadow:0 8px 28px rgba(0,0,0,.5)}
+@keyframes aiFab{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)}}
+
+/* ── AI Theme Panel ── */
+#ai-theme-panel{
+  position:fixed;bottom:78px;left:24px;z-index:8500;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:18px;width:300px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  display:none;
+  animation:panelIn .22s cubic-bezier(.22,1,.36,1);
+}
+#ai-theme-panel.atp-open{display:block}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+
+.atp-title{
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--text-dim);
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;
+}
+.atp-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* Camera preview inside the panel */
+#atp-video{
+  width:100%;height:140px;object-fit:cover;border-radius:10px;
+  background:#000;display:none;margin-bottom:12px;
+}
+#atp-canvas{display:none}
+
+/* Swatch row showing the scanned colour + derived palette */
+.atp-swatches{display:flex;gap:6px;margin-bottom:12px;min-height:32px}
+.atp-swatch{
+  flex:1;height:32px;border-radius:6px;border:1px solid rgba(255,255,255,.1);
+  cursor:pointer;transition:transform .15s;position:relative;
+}
+.atp-swatch:hover{transform:scaleY(1.15)}
+.atp-swatch-label{
+  position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);
+  font-family:'Space Mono',monospace;font-size:8px;color:var(--text-dim);
+  white-space:nowrap;
+}
+
+/* Scan / Reset / Dark / Light buttons */
+.atp-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.atp-btn{
+  flex:1;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;
+  padding:7px 10px;border-radius:7px;cursor:pointer;border:1px solid var(--border);
+  background:var(--panel);color:var(--text-dim);
+  transition:border-color .15s,color .15s,background .15s;
+  white-space:nowrap;
+}
+.atp-btn:hover{border-color:var(--gold);color:var(--gold)}
+.atp-btn.active{background:var(--gold);color:#111;border-color:var(--gold)}
+
+/* Status line inside the panel */
+.atp-status{
+  font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);
+  margin-top:10px;font-style:italic;min-height:14px;text-align:center;
+}
+
+/* ── Dark / Light theme classes applied to <html> ── */
+html.theme-light{
+  --surface : #f4f3ef;
+  --panel   : #ffffff;
+  --border  : #ddd9d0;
+  --text    : #1a1814;
+  --text-dim: #7a7060;
+  --red     : #cc2233;
+  --green   : #1a7a50;
+  --purple  : #6633cc;
+}
+html.theme-dark{
+  --surface : #0e0c09;
+  --panel   : #1a1812;
+  --border  : #2e2820;
+  --text    : #e8e0d0;
+  --text-dim: #7a7060;
+  --red     : #ff4466;
+  --green   : #00f5a0;
+  --purple  : #7c3aed;
+}
+</style>
+</head>
+<body>
+
+<!-- ████ SPLASH — only fires if not seen this session ████ -->
+<div id="splash" style="display:none">
+  <div class="sp-grid"></div>
+  <div class="sp-orb"></div>
+  <div class="sp-scan"></div>
+  <div class="sp-corner tl"></div><div class="sp-corner tr"></div>
+  <div class="sp-corner bl"></div><div class="sp-corner br"></div>
+  <div class="sp-body">
+    <div class="sp-pre">⬡ &nbsp; Welcome to &nbsp; ⬡</div>
+    <div class="sp-word" id="spW"></div>
+    <div class="sp-mgr">Manager Pro</div>
+    <div class="sp-div"></div>
+    <div class="sp-tag">36 Tables · Full CRUD · Secure Login</div>
+  </div>
+  <div class="sp-ldr">
+    <div class="sp-trk"><div class="sp-fill"></div></div>
+    <div class="sp-lbl">LOADING BANKING MANAGER PRO…</div>
+  </div>
+  <div class="sp-skip">Click to skip</div>
+</div>
+
+<!-- ████ IDLE TIMEOUT OVERLAY ████ -->
+<div id="idle-overlay">
+  <div class="idle-box">
+    <h2>⏰ Session Idle</h2>
+    <p>No activity detected for 5 minutes.<br>You will be logged out in:</p>
+    <div class="idle-timer" id="idleCountdown">30</div>
+    <button class="btn-resume" id="resumeBtn">▶ &nbsp; Resume Session</button>
+  </div>
+</div>
+
+<!-- ████ SIDEBAR ████ -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-row">
+      <div class="logo-icon">🏦</div>
+      <div>
+        <div class="logo-text">BANK MANAGER</div>
+        <div class="logo-sub">PRO · 36 Tables</div>
+      </div>
+    </div>
+  </div>
+  <div class="sidebar-search">
+    <input type="text" id="sidebarSearch" placeholder="⌕  Search tables…" autocomplete="off">
+  </div>
+  <div class="sidebar-nav" id="sidebarNav">
+    <div class="sb-sec">Dashboard</div>
+    <a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint=='index' %}active{% endif %}">
+      <span>⬡</span> Overview
+    </a>
+    <a href="{{ url_for('settings_page') }}" class="nav-item {% if request.endpoint=='settings_page' %}active{% endif %}">
+      <span>⚙</span> Settings
+    </a>
+    <div class="sb-sec" style="margin-top:6px">Tables ({{ tables|length if tables else 0 }})</div>
+    {% if tables %}
+      {% for t in tables %}
+      <a href="{{ url_for('table_view', table_name=t if t is string else t.name) }}"
+         class="nav-item {% if request.view_args and request.view_args.get('table_name')==(t if t is string else t.name) %}active{% endif %}"
+         data-table="{{ t if t is string else t.name }}">
+        <div class="nav-dot"></div>
+        {{ t if t is string else t.name }}
+      </a>
+      {% endfor %}
+    {% endif %}
+  </div>
+  <div class="sidebar-foot">
+    <div class="user-chip">
+      <div class="live-dot"></div>
+      {{ session.get('user','–') }}
+    </div>
+    <a href="{{ url_for('logout') }}" class="logout-btn" title="Sign out">⎋ Logout</a>
+  </div>
+</nav>
+
+<!-- ████ MAIN ████ -->
+<div id="main">
+  <div class="topbar">
+    <div class="bc">
+      <a href="{{ url_for('index') }}">Home</a>
+      {% block breadcrumb %}{% endblock %}
+    </div>
+    <div class="tb-right">
+      <div class="idle-chip"><div class="live-dot"></div><span id="idleTopbar">Active</span></div>
+      <span class="tb-chip">🏦 BANK MANAGER PRO</span>
+    </div>
+  </div>
+  <div class="content">
+    {% with messages=get_flashed_messages(with_categories=true) %}
+      {% for cat,msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ '✓' if cat=='success' else '⚠' }} {{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- ████ SCRIPTS ████ -->
+<script>
+/* ── 1. SPLASH — show only once per browser session ── */
+(function(){
+  const KEY = 'bm_splash_seen';
+  const splash = document.getElementById('splash');
+  if(!splash) return;
+
+  if(sessionStorage.getItem(KEY)){
+    splash.remove(); return;          // already seen — skip completely
+  }
+  sessionStorage.setItem(KEY,'1');
+  splash.style.display = 'flex';     // show it
+
+  // Build BANKING letters
+  const box = document.getElementById('spW');
+  'BANKING'.split('').forEach((ch,i)=>{
+    const s = document.createElement('span');
+    s.className='L'; s.textContent=ch;
+    s.style.animationDelay=(0.40+i*0.088)+'s';
+    box.appendChild(s);
+  });
+
+  // Particles
+  const pal=['#f0c040','#e8963c','#ffd060','#00d4ff','#ffffff'];
+  for(let i=0;i<28;i++){
+    const p=document.createElement('div');
+    p.className='sp-pt';
+    const sz=1.5+Math.random()*3.5;
+    p.style.cssText=`width:${sz}px;height:${sz}px;background:${pal[i%5]};`
+      +`left:${Math.random()*100}%;top:${Math.random()*100}%;`
+      +`--d:${(3+Math.random()*5).toFixed(1)}s;`
+      +`--dl:${(Math.random()*3).toFixed(2)}s;opacity:0`;
+    splash.appendChild(p);
+  }
+
+  function dismiss(){
+    if(splash.classList.contains('hide')) return;
+    splash.classList.add('hide');
+    setTimeout(()=>splash.remove(), 950);
+  }
+  const t = setTimeout(dismiss, 3900);
+  splash.addEventListener('click',()=>{ clearTimeout(t); dismiss(); });
+})();
+
+/* ── 2. IDLE TIMEOUT — 5 minutes → 30-second countdown → logout ── */
+(function(){
+  const IDLE_MS      = 5 * 60 * 1000;   // 5 minutes idle trigger
+  const COUNTDOWN_S  = 30;               // 30-second warning countdown
+  const overlay      = document.getElementById('idle-overlay');
+  const cdEl         = document.getElementById('idleCountdown');
+  const resumeBtn    = document.getElementById('resumeBtn');
+  const topbarEl     = document.getElementById('idleTopbar');
+
+  let idleTimer, countdownInterval, cdVal, topbarTimer;
+
+  /* Update topbar idle indicator */
+  let lastActivity = Date.now();
+  function updateTopbar(){
+    const diff = Math.max(0, IDLE_MS - (Date.now()-lastActivity));
+    const m    = Math.floor(diff/60000);
+    const s    = Math.floor((diff%60000)/1000);
+    topbarEl.textContent = diff < 60000
+      ? `Idle: ${s}s`
+      : `Idle: ${m}m ${s}s`;
+  }
+
+  function resetIdle(){
+    lastActivity = Date.now();
+    clearTimeout(idleTimer);
+    clearInterval(countdownInterval);
+    overlay.classList.remove('show');
+    idleTimer = setTimeout(showWarning, IDLE_MS);
+  }
+
+  function showWarning(){
+    cdVal = COUNTDOWN_S;
+    cdEl.textContent = cdVal;
+    overlay.classList.add('show');
+    countdownInterval = setInterval(()=>{
+      cdVal--;
+      cdEl.textContent = cdVal;
+      if(cdVal <= 0){
+        clearInterval(countdownInterval);
+        window.location.href = '/logout';
+      }
+    }, 1000);
+  }
+
+  /* Activity events */
+  ['mousemove','mousedown','keydown','touchstart','scroll','click']
+    .forEach(e => document.addEventListener(e, resetIdle, {passive:true}));
+
+  resumeBtn.addEventListener('click', resetIdle);
+
+  /* Topbar countdown updates every second */
+  topbarTimer = setInterval(updateTopbar, 1000);
+
+  resetIdle(); // start the timer
+})();
+
+/* ── 3. SIDEBAR SEARCH ── */
+const sidebarSearch = document.getElementById('sidebarSearch');
+document.querySelectorAll('#sidebarNav .nav-item[data-table]').forEach(item=>{
+  sidebarSearch.addEventListener('input',()=>{
+    const q = sidebarSearch.value.toLowerCase();
+    item.style.display = (!q || item.dataset.table.toLowerCase().includes(q)) ? '' : 'none';
+  });
+});
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════
+     AI OUTFIT-COLOR THEME PANEL
+     Floating button (bottom-left) opens this panel on every page.
+     Camera → canvas pixel sampling → dominant hue → live CSS vars.
+═══════════════════════════════════════════════════════════════════════ -->
+<button id="ai-theme-btn" title="AI Outfit Theme" aria-label="Open AI theme scanner">🎨</button>
+
+<div id="ai-theme-panel" role="dialog" aria-label="AI outfit theme">
+  <div class="atp-title">🤖 AI Outfit Theme</div>
+
+  <!-- Live camera preview -->
+  <video id="atp-video" autoplay playsinline muted></video>
+  <canvas id="atp-canvas"></canvas>
+
+  <!-- Colour swatches (filled by JS after scan) -->
+  <div class="atp-swatches" id="atp-swatches">
+    <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);align-self:center;width:100%;text-align:center">
+      Scan your outfit to extract colours
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="atp-row">
+    <button class="atp-btn" id="atp-scan">📷 Scan</button>
+    <button class="atp-btn" id="atp-capture" style="display:none">📸 Capture</button>
+    <button class="atp-btn" id="atp-reset">↺ Reset</button>
+  </div>
+  <div class="atp-row" style="margin-top:6px">
+    <button class="atp-btn" id="atp-dark"  onclick="setThemeMode('dark')">🌙 Dark</button>
+    <button class="atp-btn" id="atp-light" onclick="setThemeMode('light')">☀️ Light</button>
+  </div>
+  <div class="atp-status" id="atp-status">No scan yet</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   AI OUTFIT-COLOR THEME ENGINE
+   ───────────────────────────────────────────────────────────────────────
+   ALGORITHM (pure JS, no external library):
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  1. getUserMedia() opens the front/back camera                   │
+   │  2. Video frame is drawn onto a hidden <canvas>                  │
+   │  3. getImageData() reads every pixel                             │
+   │  4. We sample 1-in-4 pixels to keep it fast                      │
+   │  5. Pixels near skin-tone range are excluded so the dominant      │
+   │     colour reflects clothing, not the user's face/hands          │
+   │  6. Remaining pixels are bucketed into 12 hue slices (30° each)  │
+   │  7. The most-populated hue bucket wins                            │
+   │  8. That hue → HSL → generate a 5-colour palette:                │
+   │       primary   → applied to --gold  (borders, focus rings)      │
+   │       secondary → applied to --cyan  (secondary accents)         │
+   │       (surface, panel, border, text auto-follow dark/light mode)  │
+   │  9. All changes written to document.documentElement.style        │
+   └─────────────────────────────────────────────────────────────────┘
+
+   setThemeMode(mode)
+     Toggles dark / light by adding html.theme-dark or html.theme-light.
+     Persists choice in localStorage.
+
+   applyAccent(hue)
+     Takes a 0-360 hue and derives all accent CSS variables.
+
+   resetTheme()
+     Restores default gold (#f0c040) accent + current dark/light mode.
+═══════════════════════════════════════════════════════════════════════ */
+
+(function(){
+  const btn    = document.getElementById('ai-theme-btn');
+  const panel  = document.getElementById('ai-theme-panel');
+  const video  = document.getElementById('atp-video');
+  const canvas = document.getElementById('atp-canvas');
+  const swBox  = document.getElementById('atp-swatches');
+  const status = document.getElementById('atp-status');
+  const scanBtn= document.getElementById('atp-scan');
+  const captureBtn=document.getElementById('atp-capture');
+  const resetBtn=document.getElementById('atp-reset');
+  const root   = document.documentElement;
+
+  let stream=null, scanning=false;
+
+  /* ── Toggle panel open/close ── */
+  btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    panel.classList.toggle('atp-open');
+  });
+  document.addEventListener('click',e=>{
+    if(!panel.contains(e.target)&&e.target!==btn) panel.classList.remove('atp-open');
+  });
+
+  /* ── Dark / Light theme mode ──
+     Adds theme-dark or theme-light class to <html>,
+     persists to localStorage so it survives page reloads.           */
+  function setThemeMode(mode){
+    root.classList.remove('theme-dark','theme-light');
+    root.classList.add('theme-'+mode);
+    localStorage.setItem('bmp-theme-mode', mode);
+    document.getElementById('atp-dark').classList.toggle('active',  mode==='dark');
+    document.getElementById('atp-light').classList.toggle('active', mode==='light');
+    status.textContent='Theme: '+mode+' mode applied';
+  }
+  window.setThemeMode=setThemeMode;
+
+  /* Restore saved mode on load */
+  const savedMode=localStorage.getItem('bmp-theme-mode')||'dark';
+  setThemeMode(savedMode);
+
+  /* ── Apply accent hue to CSS variables ──
+     Derives a 5-colour accent palette from a single HSL hue value.
+     primary   → main accent (replaces --gold)
+     secondary → secondary accent (replaces --cyan)
+     glow      → used in box-shadow rgba values                      */
+  function applyAccent(hue){
+    const primary   = `hsl(${hue},80%,58%)`;
+    const secondary = `hsl(${(hue+150)%360},70%,55%)`;
+    const glowRgb   = hslToRgb(hue/360, .8, .58);
+    const glowA     = `rgba(${glowRgb.join(',')},`;
+
+    root.style.setProperty('--gold',  primary);
+    root.style.setProperty('--cyan',  secondary);
+    /* update focus-ring alphas used in .field-input:focus etc */
+    root.style.setProperty('--accent-glow', glowA+'0.12)');
+    localStorage.setItem('bmp-accent-hue', hue);
+    return {primary, secondary};
+  }
+
+  /* Restore saved accent on load */
+  const savedHue=localStorage.getItem('bmp-accent-hue');
+  if(savedHue) applyAccent(parseInt(savedHue,10));
+
+  /* ── Reset to defaults ── */
+  function resetAccent(){
+    root.style.removeProperty('--gold');
+    root.style.removeProperty('--cyan');
+    root.style.removeProperty('--accent-glow');
+    localStorage.removeItem('bmp-accent-hue');
+    swBox.innerHTML='<div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);align-self:center;width:100%;text-align:center">Scan your outfit to extract colours</div>';
+    status.textContent='Reset to default gold accent';
+    stopCamera();
+  }
+  window.resetAccentTheme = resetAccent;
+  resetBtn.addEventListener('click', resetAccent);
+
+  /* ── Scan button: open camera → capture → analyse ── */
+  scanBtn.addEventListener('click', async () => {
+
+    if (!navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia) {
+
+        status.textContent =
+            "Camera API not supported. Use Chrome/Edge and run through localhost or HTTPS.";
+        return;
+    }
+
+    try {
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: true
+        });
+
+        video.srcObject = stream;
+        video.style.display = 'block';
+        captureBtn.style.display = '';
+        status.textContent = 'Point at your outfit, then tap Capture.';
+
+    } catch (err) {
+
+        status.textContent =
+            "Camera Error: " + err.message;
+
+    }
+});
+
+  /* ── Capture button: actually runs the colour analysis (previously
+     unwired — Scan opened the camera but nothing ever captured a frame) ── */
+  captureBtn.addEventListener('click', () => {
+    captureAndAnalyse();
+    captureBtn.style.display = 'none';
+  });
+
+  /* ── Capture a frame and run the colour-extraction algorithm ── */
+  function captureAndAnalyse(){
+    if(!stream||!video.videoWidth){
+      status.textContent='Camera not ready yet — try again';
+      return;
+    }
+    /* Draw video frame to hidden canvas */
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0);
+
+    status.textContent='Analysing outfit colours…';
+
+    /* Read pixel data */
+    const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+
+    /* 12 hue buckets × 30° each — count saturated non-skin pixels */
+    const buckets=new Array(12).fill(0);
+    for(let i=0;i<data.length;i+=16){  /* sample 1-in-4 pixels */
+      const r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+      if(a<128) continue;              /* skip transparent */
+      /* Convert to HSL */
+      const {h,s,l}=rgbToHsl(r,g,b);
+      /* Skip near-grey, very dark, very bright, and skin-tone pixels */
+      if(s<0.15) continue;             /* low saturation = grey */
+      if(l<0.08||l>0.92) continue;     /* near-black or near-white */
+      if(h>0.02&&h<0.11&&s>0.25&&l>0.3&&l<0.75) continue; /* skin tones */
+      const bucket=Math.floor(h*12);
+      buckets[Math.min(bucket,11)]++;
+    }
+
+    /* Find the winning hue bucket */
+    let maxCount=0, winBucket=0;
+    buckets.forEach((c,i)=>{ if(c>maxCount){maxCount=c;winBucket=i;} });
+
+    if(maxCount===0){
+      status.textContent='Could not detect a clear outfit colour — try better lighting';
+      stopCamera(); return;
+    }
+
+    /* Centre hue of the winning bucket */
+    const dominantHue=Math.round((winBucket+0.5)*(360/12));
+
+    /* Generate 5 swatches: primary + 4 harmonics */
+    const palette=[
+      {label:'Primary',  hue:dominantHue},
+      {label:'Analogous',hue:(dominantHue+30 )%360},
+      {label:'Split',    hue:(dominantHue+150)%360},
+      {label:'Triad',    hue:(dominantHue+120)%360},
+      {label:'Compl.',   hue:(dominantHue+180)%360},
+    ];
+
+    /* Render swatches */
+    swBox.innerHTML=palette.map(p=>
+      `<div class="atp-swatch" style="background:hsl(${p.hue},70%,50%)"
+            onclick="applySwatchHue(${p.hue})"
+            title="Apply ${p.label}: hsl(${p.hue},70%,50%)">
+         <span class="atp-swatch-label">${p.label}</span>
+       </div>`
+    ).join('');
+
+    /* Auto-apply the dominant colour */
+    const result=applyAccent(dominantHue);
+    status.textContent=`✓ Detected hue ${dominantHue}° — click any swatch to apply`;
+    stopCamera();
+  }
+
+  /* Expose swatch click handler globally */
+  window.applySwatchHue=function(hue){
+    applyAccent(hue);
+    document.querySelectorAll('.atp-swatch').forEach(sw=>{
+      sw.style.outline=sw.onclick&&sw.onclick.toString().includes(hue)
+        ?'2px solid var(--gold)':'none';
+    });
+    status.textContent='Applied hue '+hue+'° to the theme';
+  };
+
+  function stopCamera(){
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    video.style.display='none';
+    scanning=false;
+    scanBtn.textContent='📷 Scan';
+  }
+
+  /* ── Colour math helpers ── */
+  function rgbToHsl(r,g,b){
+    r/=255;g/=255;b/=255;
+    const max=Math.max(r,g,b),min=Math.min(r,g,b);
+    let h,s,l=(max+min)/2;
+    if(max===min){h=s=0;}
+    else{
+      const d=max-min;
+      s=l>.5?d/(2-max-min):d/(max+min);
+      switch(max){
+        case r:h=(g-b)/d+(g<b?6:0);break;
+        case g:h=(b-r)/d+2;break;
+        default:h=(r-g)/d+4;
+      }
+      h/=6;
+    }
+    return{h,s,l};
+  }
+  function hslToRgb(h,s,l){
+    let r,g,b;
+    if(s===0){r=g=b=l;}
+    else{
+      const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;
+      r=hue2rgb(p,q,h+1/3);
+      g=hue2rgb(p,q,h);
+      b=hue2rgb(p,q,h-1/3);
+    }
+    return[Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+  }
+  function hue2rgb(p,q,t){
+    if(t<0)t+=1;if(t>1)t-=1;
+    if(t<1/6)return p+(q-p)*6*t;
+    if(t<1/2)return q;
+    if(t<2/3)return p+(q-p)*(2/3-t)*6;
+    return p;
+  }
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

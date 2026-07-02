@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}BANK Manager — Settings{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span><span class="cur">Settings</span>{% endblock %}
+
+{% block content %}
+<style>
+.settings-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:18px;
+}
+.settings-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:22px 24px;
+  animation:fadeIn .4s ease both;
+}
+.settings-card h3{
+  font-size:15px;font-weight:700;color:var(--text);
+  display:flex;align-items:center;gap:9px;margin-bottom:6px;
+}
+.settings-card h3::before{
+  content:'';width:3px;height:16px;background:var(--gold);border-radius:2px;display:block;
+}
+.settings-card p.desc{
+  font-size:12.5px;color:var(--text-dim);line-height:1.55;margin-bottom:16px;
+}
+.mode-row{display:flex;gap:10px;margin-bottom:6px}
+.mode-btn{
+  flex:1;padding:14px 10px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--border);background:var(--panel);color:var(--text-dim);
+  font-family:'Space Mono',monospace;font-size:12px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  transition:border-color .15s,color .15s,background .15s,transform .15s;
+}
+.mode-btn span.ico{font-size:22px}
+.mode-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-1px)}
+.mode-btn.is-active{background:var(--gold);color:#111;border-color:var(--gold)}
+.accent-row{display:flex;gap:10px;flex-wrap:wrap}
+.accent-swatch{
+  width:34px;height:34px;border-radius:50%;cursor:pointer;
+  border:2px solid transparent;transition:transform .15s,border-color .15s;
+}
+.accent-swatch:hover{transform:scale(1.12)}
+.settings-note{
+  font-size:11px;color:var(--text-dim);font-style:italic;margin-top:12px;
+}
+.link-out{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-radius:10px;border:1px solid var(--border);
+  background:var(--panel);margin-top:4px;text-decoration:none;color:var(--text);
+  transition:border-color .15s,background .15s;
+}
+.link-out:hover{border-color:var(--cyan);background:var(--border)}
+.link-out .lo-title{font-weight:700;font-size:13px}
+.link-out .lo-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.link-out .lo-arrow{font-size:18px;color:var(--cyan)}
+.field-row{margin-bottom:14px}
+.field-row label{display:block;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+</style>
+
+<div class="section-header">
+  <div class="section-title">⚙ Settings</div>
+</div>
+
+<div class="settings-grid">
+
+  <!-- ── Appearance / Theme ── -->
+  <div class="settings-card">
+    <h3>🎨 Appearance</h3>
+    <p class="desc">Switch between dark and light surfaces. Your choice is saved on this device and applies across every page.</p>
+
+    <div class="mode-row">
+      <button class="mode-btn" id="settingsDarkBtn" onclick="setThemeMode('dark'); syncSettingsModeButtons();">
+        <span class="ico">🌙</span> Dark
+      </button>
+      <button class="mode-btn" id="settingsLightBtn" onclick="setThemeMode('light'); syncSettingsModeButtons();">
+        <span class="ico">☀️</span> Light
+      </button>
+    </div>
+    <p class="settings-note">Prefer the quick-access version? The floating 🎨 button (bottom-left, every page) opens the same controls plus an outfit-colour accent scanner.</p>
+  </div>
+
+  <!-- ── Accent colour ── -->
+  <div class="settings-card">
+    <h3>✨ Accent Colour</h3>
+    <p class="desc">Pick an accent used for highlights, borders and focus rings — or reset to the default Bank Manager gold.</p>
+    <div class="accent-row" id="settingsAccentRow">
+      <div class="accent-swatch" style="background:#f0c040" onclick="applySettingsAccent(45)" title="Gold (default)"></div>
+      <div class="accent-swatch" style="background:#00d4ff" onclick="applySettingsAccent(195)" title="Cyan"></div>
+      <div class="accent-swatch" style="background:#00f5a0" onclick="applySettingsAccent(155)" title="Green"></div>
+      <div class="accent-swatch" style="background:#7c3aed" onclick="applySettingsAccent(265)" title="Purple"></div>
+      <div class="accent-swatch" style="background:#ff4466" onclick="applySettingsAccent(350)" title="Red"></div>
+      <div class="accent-swatch" style="background:#ff8c00" onclick="applySettingsAccent(30)" title="Orange"></div>
+    </div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:14px" onclick="resetAccentTheme()">↺ Reset to default</button>
+  </div>
+
+  <!-- ── Session ── -->
+  <div class="settings-card">
+    <h3>⏰ Session</h3>
+    <p class="desc">You're automatically signed out after 5 minutes of inactivity, with a 30-second warning before logout.</p>
+    <div class="field-row">
+      <label>Signed in as</label>
+      <div class="user-chip" style="display:inline-flex"><div class="live-dot"></div>{{ session.get('user','–') }}</div>
+    </div>
+    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">⎋ Sign out now</a>
+  </div>
+
+  <!-- ── Connected tools ── -->
+  <div class="settings-card">
+    <h3>🔗 Connected Tools</h3>
+    <p class="desc">Bank Manager Pro also ships with a companion API &amp; DB Dashboard — schema browser, SQL playground, and REST API console for the same database.</p>
+    <a class="link-out" href="http://localhost:3000" target="_blank" rel="noopener">
+      <div>
+        <div class="lo-title">API &amp; DB Dashboard</div>
+        <div class="lo-sub">Runs separately on localhost:3000 — start it with <code>npm run dev</code></div>
+      </div>
+      <div class="lo-arrow">↗</div>
+    </a>
+  </div>
+
+  <!-- ── REST API ── -->
+  <div class="settings-card">
+    <h3>🔌 REST API</h3>
+    <p class="desc">Every table is available as a JSON API under <code>/api/v1/</code>, authenticated with an API key sent as an <code>X-API-Key</code> header. Configure the key via the <code>API_KEY</code> environment variable — see <code>.env.example</code>.</p>
+    <div class="field-row">
+      <label>Example request</label>
+      <pre style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;overflow-x:auto;margin:0">curl http://localhost:5000/api/v1/tables \
+  -H "X-API-Key: your-api-key"</pre>
+    </div>
+    <p class="settings-note">The API is configured via environment variables, not from this page — see the project README for the full endpoint list.</p>
+  </div>
+
+</div>
+
+<script>
+function syncSettingsModeButtons(){
+  const mode = localStorage.getItem('bmp-theme-mode') || 'dark';
+  const d = document.getElementById('settingsDarkBtn');
+  const l = document.getElementById('settingsLightBtn');
+  if(d) d.classList.toggle('is-active', mode==='dark');
+  if(l) l.classList.toggle('is-active', mode==='light');
+}
+function applySettingsAccent(hue){
+  /* Reuses the same accent-application logic as the floating AI theme panel. */
+  const primary   = `hsl(${hue},80%,58%)`;
+  const secondary = `hsl(${(hue+150)%360},70%,55%)`;
+  document.documentElement.style.setProperty('--gold', primary);
+  document.documentElement.style.setProperty('--cyan', secondary);
+  localStorage.setItem('bmp-accent-hue', hue);
+}
+document.addEventListener('DOMContentLoaded', syncSettingsModeButtons);
+</script>
+{% endblock %}
